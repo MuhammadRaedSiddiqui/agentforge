@@ -14,6 +14,7 @@ import os
 from typing import Any
 
 import pytest
+from dotenv import load_dotenv
 
 
 @pytest.mark.integration
@@ -23,6 +24,9 @@ def test_gemini_smoke() -> None:
 
     This test MUST pass before dependency versions are locked.
     """
+    # Load environment variables
+    load_dotenv()
+
     # Check for API key
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:

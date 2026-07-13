@@ -110,5 +110,5 @@ COMMENT ON TABLE deployments IS 'Deployment lifecycles with state machine enforc
 COMMENT ON COLUMN deployments.intent IS 'Immutable deployment intent';
 COMMENT ON COLUMN deployments.status IS 'Current state in deployment lifecycle';
 COMMENT ON COLUMN deployments.lock_owner IS 'Active local session identifier holding the lock';
-COMMENT ON CONSTRAINT one_active_modifying_deployment_per_org
-    ON deployments IS 'Prevents concurrent modifying deployments for same organization';
+COMMENT ON INDEX one_active_modifying_deployment_per_org
+    IS 'Prevents concurrent modifying deployments for same organization';

@@ -12,6 +12,7 @@ from datetime import datetime
 from uuid import uuid4
 
 import pytest
+from dotenv import load_dotenv
 
 from adapters.supabase_internal import SupabaseInternalClient
 from cli.config import AgentForgeConfig, load_config
@@ -24,6 +25,7 @@ class TestInternalStore:
     @pytest.fixture
     def config(self) -> AgentForgeConfig:
         """Load configuration from environment."""
+        load_dotenv()  # Load .env file first
         if not os.getenv("SUPABASE_INTERNAL_URL"):
             pytest.skip("SUPABASE_INTERNAL_URL not configured")
 

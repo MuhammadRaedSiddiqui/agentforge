@@ -57,5 +57,5 @@ COMMENT ON COLUMN external_resources.parent_external_resource_id IS 'Parent reso
 COMMENT ON COLUMN external_resources.lifecycle_status IS 'Current status: active, inactive, deleted, or unknown';
 COMMENT ON COLUMN external_resources.last_observed_hash IS 'Sanitized remote-state hash';
 COMMENT ON COLUMN external_resources.last_verified_at IS 'Last reconciliation timestamp';
-COMMENT ON CONSTRAINT external_resources_platform_type_remote_id
-    ON external_resources IS 'Prevents duplicate resource registration';
+COMMENT ON INDEX external_resources_platform_type_remote_id
+    IS 'Prevents duplicate resource registration';
