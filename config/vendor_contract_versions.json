@@ -1,0 +1,101 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Vendor API contract versions and model identifiers locked after Phase 0 smoke tests",
+    "locked_at": null,
+    "last_verified": null
+  },
+  "models": {
+    "gemini": {
+      "provider": "google",
+      "model_id": "gemini-2.5-pro",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "compatibility_mode": "openai",
+      "sdk_version": null,
+      "verified": false,
+      "smoke_test_passed": false,
+      "notes": "Must pass structured output, function tool, multi-turn, and error handling tests"
+    }
+  },
+  "platforms": {
+    "vapi": {
+      "api_version": "v1",
+      "base_url": "https://api.vapi.ai",
+      "contract_hash": null,
+      "verified": false,
+      "operations": {
+        "create_assistant": "POST /assistant",
+        "get_assistant": "GET /assistant/{id}",
+        "update_assistant": "PATCH /assistant/{id}",
+        "delete_assistant": "DELETE /assistant/{id}",
+        "create_tool": "POST /tool",
+        "list_tools": "GET /tool",
+        "get_tool": "GET /tool/{id}",
+        "assign_phone_number": "PATCH /phone-number/{id}"
+      }
+    },
+    "make": {
+      "api_version": "2",
+      "base_url_template": "https://{zone}.make.com/api/v2",
+      "contract_hash": null,
+      "verified": false,
+      "operations": {
+        "create_scenario": "POST /scenarios",
+        "get_scenario": "GET /scenarios/{id}",
+        "list_scenarios": "GET /scenarios",
+        "delete_scenario": "DELETE /scenarios/{id}",
+        "get_blueprint": "GET /scenarios/{id}/blueprint",
+        "activate_scenario": "PATCH /scenarios/{id}",
+        "deactivate_scenario": "PATCH /scenarios/{id}",
+        "create_hook": "POST /hooks",
+        "get_hook": "GET /hooks/{id}",
+        "list_hooks": "GET /hooks",
+        "delete_hook": "DELETE /hooks/{id}",
+        "verify_hook": "POST /hooks/{id}/verify"
+      }
+    },
+    "supabase": {
+      "client_sdk_version": null,
+      "management_api_version": "v1",
+      "verified": false,
+      "operations": {
+        "select_rows": "client.table().select()",
+        "insert_row": "client.table().insert()",
+        "update_row": "client.table().update()",
+        "delete_row": "client.table().delete()"
+      }
+    },
+    "hosting": {
+      "provider": "render",
+      "api_version": "v1",
+      "base_url": "https://api.render.com/v1",
+      "contract_hash": null,
+      "verified": false,
+      "operations": {
+        "get_service": "GET /services/{id}",
+        "get_env_variable": "GET /services/{id}/env-vars/{key}",
+        "set_env_variable": "PUT /services/{id}/env-vars/{key}",
+        "trigger_deploy": "POST /services/{id}/deploys",
+        "get_deploy_status": "GET /services/{id}/deploys/{deploy_id}"
+      }
+    },
+    "brave_search": {
+      "api_version": "v1",
+      "base_url": "https://api.search.brave.com/res/v1",
+      "contract_hash": null,
+      "verified": false,
+      "operations": {
+        "web_search": "GET /web/search"
+      }
+    }
+  },
+  "chroma": {
+    "version": null,
+    "distance_metric": "cosine",
+    "embedding_function": "default",
+    "threshold": 1.5,
+    "calibrated": false,
+    "calibration_date": null,
+    "notes": "Distance threshold must be calibrated against labeled fixtures before production"
+  }
+}
