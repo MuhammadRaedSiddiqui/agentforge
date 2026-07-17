@@ -75,6 +75,7 @@ class TestRedactionSecurity:
 
         # Convert to string to check all nested values
         import json
+
         redacted_str = json.dumps(redacted)
 
         assert "secret_token_12345" not in redacted_str
@@ -177,7 +178,7 @@ class TestRedactionSecurity:
         # Check that no substring of 8+ chars from the secret remains
         secret = "1234567890abcdefghij"
         for i in range(len(secret) - 7):
-            substring = secret[i:i+8]
+            substring = secret[i : i + 8]
             assert substring not in redacted, f"Partial secret leaked: {substring}"
 
     def test_multiple_secrets_all_redacted(self) -> None:

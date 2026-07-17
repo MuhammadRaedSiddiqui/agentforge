@@ -1,0 +1,228 @@
+{
+  "name": "{{organization_display_name}} - Appointment Booking",
+  "description": "Process appointment booking requests from Vapi assistant and create appointment records in the client's Supabase database",
+  "teamId": "{{make_team_id}}",
+  "scheduling": {
+    "type": "immediately"
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "{{booking_hook_id}}",
+        "dataStructure": {
+          "date": "string",
+          "time": "string",
+          "service_type": "string",
+          "client_name": "string",
+          "client_phone": "string",
+          "client_email": "string",
+          "notes": "string"
+        }
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {},
+        "expect": [
+          {
+            "name": "date",
+            "type": "text",
+            "label": "Date",
+            "required": true
+          },
+          {
+            "name": "time",
+            "type": "text",
+            "label": "Time",
+            "required": true
+          },
+          {
+            "name": "service_type",
+            "type": "text",
+            "label": "Service Type",
+            "required": true
+          },
+          {
+            "name": "client_name",
+            "type": "text",
+            "label": "Client Name",
+            "required": true
+          },
+          {
+            "name": "client_phone",
+            "type": "text",
+            "label": "Client Phone",
+            "required": true
+          },
+          {
+            "name": "client_email",
+            "type": "text",
+            "label": "Client Email",
+            "required": false
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "label": "Notes",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicFunction",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "code": "return [{ appointment_id: 'APT-' + Math.random().toString(36).substr(2, 9).toUpperCase() }];"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "type": "text",
+            "label": "Code"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "module": "supabase:ActionInsertRow",
+      "version": 1,
+      "parameters": {
+        "connection": "{{supabase_connection_id}}",
+        "table": "appointments"
+      },
+      "mapper": {
+        "organization_id": "{{organization_id}}",
+        "appointment_id": "{{2.appointment_id}}",
+        "date": "{{1.date}}",
+        "time": "{{1.time}}",
+        "service_type": "{{1.service_type}}",
+        "client_name": "{{1.client_name}}",
+        "client_phone": "{{1.client_phone}}",
+        "client_email": "{{1.client_email}}",
+        "notes": "{{1.notes}}",
+        "status": "confirmed",
+        "created_at": "{{now}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "supabase:ActionUpdateRows",
+      "version": 1,
+      "parameters": {
+        "connection": "{{supabase_connection_id}}",
+        "table": "availability_slots",
+        "filter": [
+          {
+            "column": "organization_id",
+            "operator": "eq",
+            "value": "{{organization_id}}"
+          },
+          {
+            "column": "date",
+            "operator": "eq",
+            "value": "{{1.date}}"
+          },
+          {
+            "column": "time_slot",
+            "operator": "eq",
+            "value": "{{1.time}}"
+          }
+        ]
+      },
+      "mapper": {
+        "is_available": "false",
+        "appointment_id": "{{2.appointment_id}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "json:TransformToJSON",
+      "version": 1,
+      "parameters": {
+        "type": "object"
+      },
+      "mapper": {
+        "success": true,
+        "appointment_id": "{{2.appointment_id}}",
+        "date": "{{1.date}}",
+        "time": "{{1.time}}",
+        "client_name": "{{1.client_name}}",
+        "organization_id": "{{organization_id}}",
+        "message": "Appointment booked successfully"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useQuerystring": false,
+        "parseResponse": true,
+        "timeout": 300,
+        "serializeUrl": false
+      },
+      "mapper": {
+        "url": "{{1.__IMTHOOK__.url}}",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "body": "{{5.json}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": "{{organization_id}}_booking",
+    "organization_id": "{{organization_id}}",
+    "capability": "booking",
+    "template_version": "1.0.0",
+    "designer": {
+      "orphans": []
+    }
+  }
+}

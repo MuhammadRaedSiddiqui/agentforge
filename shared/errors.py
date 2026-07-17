@@ -5,11 +5,23 @@ Provides typed exceptions for different failure scenarios to enable
 proper routing, retry logic, and recovery strategies.
 """
 
+from typing import Any
+
 
 class AgentForgeError(Exception):
     """Base exception for all Agent Forge errors."""
 
-    pass
+    def __init__(self, message: str, context: dict[str, Any] | None = None):
+        """
+        Initialize error with message and optional context.
+
+        Args:
+            message: Error message
+            context: Additional context for debugging
+        """
+        super().__init__(message)
+        self.message = message
+        self.context = context or {}
 
 
 class ValidationError(AgentForgeError):
@@ -19,7 +31,22 @@ class ValidationError(AgentForgeError):
     This is a permanent error - retry will not help without changes.
     """
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        field: str | None = None,
+        context: dict[str, Any] | None = None,
+    ):
+        """
+        Initialize validation error.
+
+        Args:
+            message: Error message
+            field: Field that failed validation
+            context: Additional context
+        """
+        super().__init__(message, context)
+        self.field = field
 
 
 class AuthorizationError(AgentForgeError):
@@ -29,7 +56,14 @@ class AuthorizationError(AgentForgeError):
     May indicate expired credentials, insufficient permissions, or invalid tokens.
     """
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        resource: str | None = None,
+        context: dict[str, Any] | None = None,
+    ):
+        super().__init__(message, context)
+        self.resource = resource
 
 
 class ConflictError(AgentForgeError):
@@ -39,7 +73,22 @@ class ConflictError(AgentForgeError):
     May be resolvable through reconciliation or regeneration with updated state.
     """
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        resource: str | None = None,
+        context: dict[str, Any] | None = None,
+    ):
+        """
+        Initialize conflict error.
+
+        Args:
+            message: Error message
+            resource: Resource that has conflict
+            context: Additional context
+        """
+        super().__init__(message, context)
+        self.resource = resource
 
 
 class TransientError(AgentForgeError):
@@ -58,6 +107,8 @@ class PermanentError(AgentForgeError):
 
     Examples: invalid request format, unsupported operation, resource not found.
     """
+
+    pass
 
     pass
 

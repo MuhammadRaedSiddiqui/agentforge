@@ -6,10 +6,10 @@ Provides deterministic hashing for artifacts, proposals, and audit chains.
 
 import hashlib
 import json
-from typing import Any, Dict, Union
+from typing import Any
 
 
-def hash_content(content: Union[str, bytes]) -> str:
+def hash_content(content: str | bytes) -> str:
     """
     Compute SHA-256 hash of content.
 
@@ -27,7 +27,7 @@ def hash_content(content: Union[str, bytes]) -> str:
     return hashlib.sha256(content_bytes).hexdigest()
 
 
-def hash_json(data: Dict[str, Any]) -> str:
+def hash_json(data: dict[str, Any]) -> str:
     """
     Compute SHA-256 hash of JSON data with canonical serialization.
 
@@ -71,7 +71,7 @@ def hash_file(file_path: str) -> str:
 def compute_proposal_hash(
     platform: str,
     operation: str,
-    target: Dict[str, Any],
+    target: dict[str, Any],
     payload_hash: str,
     state_version: str,
     dependencies: list[str],
@@ -122,7 +122,7 @@ def compute_audit_hash(
     actor_id: str,
     subject_id: str,
     status: str,
-    detail: Dict[str, Any],
+    detail: dict[str, Any],
     timestamp: str,
     previous_hash: str,
 ) -> str:
@@ -154,7 +154,7 @@ def compute_audit_hash(
     return hash_json(event_components)
 
 
-def verify_hash(content: Union[str, bytes], expected_hash: str) -> bool:
+def verify_hash(content: str | bytes, expected_hash: str) -> bool:
     """
     Verify that content matches expected hash.
 
@@ -169,7 +169,7 @@ def verify_hash(content: Union[str, bytes], expected_hash: str) -> bool:
     return actual_hash == expected_hash
 
 
-def compute_intake_hash(intake: Dict[str, Any]) -> str:
+def compute_intake_hash(intake: dict[str, Any]) -> str:
     """
     Compute hash of sanitized intake data.
 
@@ -189,7 +189,7 @@ def compute_intake_hash(intake: Dict[str, Any]) -> str:
     return hash_json(sanitized)
 
 
-def compute_state_version(state: Dict[str, Any]) -> str:
+def compute_state_version(state: dict[str, Any]) -> str:
     """
     Compute a state version hash from current external state.
 
@@ -202,3 +202,21 @@ def compute_state_version(state: Dict[str, Any]) -> str:
         SHA-256 hash of canonical state representation
     """
     return hash_json(state)
+
+
+def compute_content_hash(content: str | bytes | dict[str, Any]) -> str:
+    """
+    Compute SHA-256 hash of content.
+
+    Convenience function that handles strings, bytes, or dictionaries.
+
+    Args:
+        content: String, bytes, or dictionary to hash
+
+    Returns:
+        Hex-encoded SHA-256 hash
+    """
+    if isinstance(content, dict):
+        return hash_json(content)
+    else:
+        return hash_content(content)

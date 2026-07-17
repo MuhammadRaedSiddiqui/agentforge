@@ -9,7 +9,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 from shared.errors import OrganizationLockError
 
@@ -89,7 +89,7 @@ class OrganizationLock:
         except Exception:
             return "unknown"
 
-    def _read_lock_file(self, lock_file: Path) -> Optional[dict]:
+    def _read_lock_file(self, lock_file: Path) -> dict[str, Any] | None:
         """
         Read lock file contents.
 
@@ -101,13 +101,12 @@ class OrganizationLock:
         """
         try:
             with lock_file.open("r") as f:
-                return json.load(f)
+                data = json.load(f)
+                return dict(data) if isinstance(data, dict) else None
         except Exception:
             return None
 
-    def _write_lock_file(
-        self, lock_file: Path, session_id: str, organization_id: str
-    ) -> None:
+    def _write_lock_file(self, lock_file: Path, session_id: str, organization_id: str) -> None:
         """
         Write lock file.
 
@@ -127,7 +126,7 @@ class OrganizationLock:
         with lock_file.open("w") as f:
             json.dump(lock_data, f, indent=2)
 
-    def _is_stale(self, lock_data: dict) -> bool:
+    def _is_stale(self, lock_data: dict[str, Any]) -> bool:
         """
         Check if lock is stale.
 
@@ -137,7 +136,8 @@ class OrganizationLock:
         Returns:
             True if lock is stale
         """
-        acquired_at = lock_data.get("acquired_at", 0)
+        acquired_at_raw = lock_data.get("acquired_at", 0)
+        acquired_at = float(acquired_at_raw) if isinstance(acquired_at_raw, (int, float)) else 0.0
         age = time.time() - acquired_at
 
         return age > self.staleness_threshold
@@ -259,7 +259,7 @@ class OrganizationLock:
         lock_file.unlink()
         return True
 
-    def check_lock(self, organization_id: str) -> Optional[LockInfo]:
+    def check_lock(self, organization_id: str) -> LockInfo | None:
         """
         Check if organization is locked.
 

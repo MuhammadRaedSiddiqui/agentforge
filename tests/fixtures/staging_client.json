@@ -2,7 +2,7 @@
   "organization_id": "agent_forge_staging",
   "business_name": "Agent Forge Staging Salon",
   "phone_number": "+15555550199",
-  "voice_id": "en-US-neural-male-1",
+  "voice_id": "burt",
   "timezone": "America/New_York",
   "business_hours": {
     "monday": [
@@ -61,5 +61,9 @@
     "vapi_phone_number_id": "staging-phone-vapi-12345",
     "make_team_id": "staging-team-make-67890",
     "supabase_project_ref": "staging-supabase-ref"
-  }
+  },
+  "hosting": {
+    "webhook_base_url": "https://averon-ztfm.onrender.com"
+  },
+  "server_source_path": "server.js"
 }

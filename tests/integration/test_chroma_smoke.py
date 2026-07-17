@@ -8,7 +8,6 @@ Verifies that Chroma can:
 - Delete a temporary collection
 """
 
-import os
 import shutil
 from pathlib import Path
 
@@ -67,9 +66,7 @@ def test_chroma_smoke() -> None:
 
         # Test 4: Retrieve by similarity
         try:
-            results = collection.query(
-                query_texts=["What is Agent Forge?"], n_results=1
-            )
+            results = collection.query(query_texts=["What is Agent Forge?"], n_results=1)
 
             assert results is not None
             assert "documents" in results
@@ -104,10 +101,28 @@ def test_chroma_smoke() -> None:
         print("All smoke tests passed. Chroma is working correctly.")
 
     finally:
+        # Release client before cleanup to avoid Windows file locks
+        if "client" in dir():
+            del client
+        import gc
+
+        gc.collect()
+
         # Clean up test directory
         if Path(test_persist_dir).exists():
-            shutil.rmtree(test_persist_dir)
-            print(f"✓ Cleaned up test directory: {test_persist_dir}")
+            try:
+                shutil.rmtree(test_persist_dir)
+                print(f"✓ Cleaned up test directory: {test_persist_dir}")
+            except PermissionError:
+                # Windows may hold file locks briefly after client release
+                import time
+
+                time.sleep(0.5)
+                try:
+                    shutil.rmtree(test_persist_dir)
+                    print(f"✓ Cleaned up test directory (retry): {test_persist_dir}")
+                except PermissionError:
+                    print(f"⚠ Could not clean {test_persist_dir} (locked) - harmless")
 
 
 if __name__ == "__main__":

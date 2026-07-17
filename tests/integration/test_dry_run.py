@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from orchestrator.orchestrator import Orchestrator
 from cli.config import AgentForgeConfig, load_config
+from orchestrator.orchestrator import Orchestrator
 
 
 @pytest.mark.integration
@@ -40,12 +40,8 @@ class TestDryRunFlow:
                 "phone_number": "+15555550100",
                 "voice_id": "test_voice",
                 "timezone": "America/New_York",
-                "business_hours": {
-                    "monday": [{"open": "09:00", "close": "17:00"}]
-                },
-                "services_offered": [
-                    {"name": "Consultation", "duration_minutes": 30}
-                ],
+                "business_hours": {"monday": [{"open": "09:00", "close": "17:00"}]},
+                "services_offered": [{"name": "Consultation", "duration_minutes": 30}],
                 "booking_calendar_id": "test_calendar",
                 "cancellation_window_hours": 24,
                 "rescheduling_policy": {"minimum_notice_hours": 12},
@@ -55,11 +51,9 @@ class TestDryRunFlow:
                     "booking",
                     "cancellation",
                     "rescheduling",
-                    "human_transfer"
+                    "human_transfer",
                 ],
-                "external_identifiers": {
-                    "vapi_phone_number_id": "test_phone_id"
-                }
+                "external_identifiers": {"vapi_phone_number_id": "test_phone_id"},
             }
 
         with fixture_path.open("r") as f:
@@ -154,9 +148,7 @@ class TestDryRunFlow:
         # Should have checked for existing deployment
         assert "existing_deployment" in result or "deployment_status" in result
 
-    def test_dry_run_normalizes_organization_id(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_dry_run_normalizes_organization_id(self, orchestrator: Orchestrator) -> None:
         """Should normalize organization_id in plan."""
         fixture = {
             "organization_id": "Test Org Name!",
@@ -179,9 +171,7 @@ class TestDryRunFlow:
         assert org_id.islower()
         assert " " not in org_id
 
-    def test_dry_run_validates_intake_first(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_dry_run_validates_intake_first(self, orchestrator: Orchestrator) -> None:
         """Should validate intake before planning."""
         invalid_fixture = {
             "organization_id": "test_org",
@@ -234,9 +224,7 @@ class TestDryRunFlow:
         parsed = json.loads(json_output)
         assert parsed["success"] == result["success"]
 
-    def test_dry_run_capability_specific_validations(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    def test_dry_run_capability_specific_validations(self, orchestrator: Orchestrator) -> None:
         """Should validate capability-specific required fields."""
         # Booking capability without calendar ID
         fixture = {
@@ -256,8 +244,7 @@ class TestDryRunFlow:
 
         # Should fail validation
         assert result["success"] is False
-        assert any("booking_calendar_id" in str(err).lower()
-                   for err in result.get("errors", []))
+        assert any("booking_calendar_id" in str(err).lower() for err in result.get("errors", []))
 
     def test_dry_run_plan_includes_all_enabled_capabilities(
         self, orchestrator: Orchestrator, staging_fixture: dict
@@ -271,8 +258,9 @@ class TestDryRunFlow:
         # Should reference enabled capabilities
         for capability in staging_fixture["enabled_capabilities"]:
             # At least some mention of each capability
-            assert capability.lower() in plan_str or \
-                   capability.replace("_", " ").lower() in plan_str
+            assert (
+                capability.lower() in plan_str or capability.replace("_", " ").lower() in plan_str
+            )
 
 
 if __name__ == "__main__":

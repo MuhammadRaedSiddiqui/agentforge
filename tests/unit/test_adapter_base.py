@@ -4,9 +4,10 @@ Unit tests for base HTTP adapter.
 Tests for timeout, retry classification, redaction, and receipt behavior.
 """
 
+from unittest.mock import Mock
+
 import pytest
 import requests
-from unittest.mock import Mock, patch
 
 from adapters.base import BaseHTTPAdapter, HTTPReceipt
 from shared.errors import (

@@ -5,7 +5,7 @@ Represents the output from a specialist agent task execution.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
@@ -21,12 +21,12 @@ class ResultObject:
     content_hash: str
     storage_path: str
     summary: str
-    field_provenance: Dict[str, Dict[str, str]]
-    model_id: Optional[str]
+    field_provenance: dict[str, dict[str, str]]
+    model_id: str | None
     validation_status: str
 
     # Optional metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate result object after initialization."""
@@ -49,7 +49,7 @@ class ResultObject:
                 f"Must be one of {valid_statuses}"
             )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert to dictionary for serialization.
 
@@ -69,7 +69,7 @@ class ResultObject:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ResultObject":
+    def from_dict(cls, data: dict[str, Any]) -> "ResultObject":
         """
         Create ResultObject from dictionary.
 

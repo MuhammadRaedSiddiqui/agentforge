@@ -254,9 +254,7 @@ class TestInternalStore:
             assert updated[0]["status"] == "awaiting_action_approval"
 
             # Verify final state
-            final_deployment = client.get_by_id(
-                "deployments", "deployment_id", deployment_id
-            )
+            final_deployment = client.get_by_id("deployments", "deployment_id", deployment_id)
 
             assert final_deployment is not None
             assert final_deployment["status"] == "awaiting_action_approval"
@@ -270,9 +268,7 @@ class TestInternalStore:
             except Exception:
                 pass
 
-    def test_query_deployments_by_organization(
-        self, client: SupabaseInternalClient
-    ) -> None:
+    def test_query_deployments_by_organization(self, client: SupabaseInternalClient) -> None:
         """Should query deployments for an organization."""
         org_id = f"test_org_{uuid4().hex[:8]}"
 

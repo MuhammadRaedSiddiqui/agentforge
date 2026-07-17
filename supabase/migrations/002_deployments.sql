@@ -91,11 +91,11 @@ ALTER TABLE deployments ADD CONSTRAINT deployments_intake_required
         (intent NOT IN ('status_only', 'recovery_only') AND intake_id IS NOT NULL)
     );
 
--- Check constraint: plan_hash required after planning
+-- A plan hash is required after planning. Terminal failed/aborted records
+-- without a plan represent failures before plan persistence.
 ALTER TABLE deployments ADD CONSTRAINT deployments_plan_hash_required
     CHECK (
-        (status IN ('planning') AND plan_hash IS NULL) OR
-        (status NOT IN ('planning') AND plan_hash IS NOT NULL)
+        plan_hash IS NOT NULL OR status IN ('planning', 'failed', 'aborted')
     );
 
 -- Check constraint: completed_at only for terminal states

@@ -6,7 +6,7 @@ Tests for correct ordering, dependencies, approval points, and all capabilities.
 
 import pytest
 
-from orchestrator.planner import Planner, TaskGraph
+from orchestrator.planner import Planner
 
 
 @pytest.mark.unit
@@ -115,8 +115,7 @@ class TestPlanner:
         graph = planner.create_task_graph(intake)
 
         # Should have one set of Vapi generation tasks, not duplicated per capability
-        vapi_tasks = [t for t in graph.get_all_tasks()
-                      if t.agent_target == "vapi_agent"]
+        vapi_tasks = [t for t in graph.get_all_tasks() if t.agent_target == "vapi_agent"]
 
         # Count generation tasks (not validation or approval)
         gen_tasks = [t for t in vapi_tasks if "generate" in t.action_type.lower()]
@@ -176,8 +175,9 @@ class TestPlanner:
         seen_ids = set()
         for task in ordered:
             for dep_id in task.dependencies:
-                assert dep_id in seen_ids, \
+                assert dep_id in seen_ids, (
                     f"Task {task.task_id} depends on {dep_id} which hasn't been seen yet"
+                )
             seen_ids.add(task.task_id)
 
     def test_no_circular_dependencies(self) -> None:

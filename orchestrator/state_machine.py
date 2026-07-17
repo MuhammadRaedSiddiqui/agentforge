@@ -4,9 +4,27 @@ Deployment state machine for Agent Forge.
 Enforces valid state transitions and rejects illegal transitions.
 """
 
-from typing import Dict, List, Optional, Set
+from enum import Enum
 
 from shared.errors import StateTransitionError
+
+
+class DeploymentState(Enum):
+    """Enumeration of all possible deployment states."""
+
+    PLANNING = "planning"
+    AWAITING_PLAN_APPROVAL = "awaiting_plan_approval"
+    GENERATING = "generating"
+    AWAITING_ACTION_APPROVAL = "awaiting_action_approval"
+    EXECUTING = "executing"
+    VERIFYING = "verifying"
+    PARTIAL = "partial"
+    RECOVERY_REQUIRED = "recovery_required"
+    COMPENSATING = "compensating"
+    # Canonical PostgreSQL deployment_status enum value.
+    COMPLETED = "complete"
+    FAILED = "failed"
+    ABORTED = "aborted"
 
 
 class DeploymentStateMachine:
@@ -18,7 +36,7 @@ class DeploymentStateMachine:
     """
 
     # Define valid state transitions
-    VALID_TRANSITIONS: Dict[str, Set[str]] = {
+    VALID_TRANSITIONS: dict[str, set[str]] = {
         "planning": {
             "awaiting_plan_approval",
             "aborted",
@@ -121,9 +139,7 @@ class DeploymentStateMachine:
             return
 
         if not DeploymentStateMachine.is_valid_transition(current_state, new_state):
-            valid_next_states = DeploymentStateMachine.VALID_TRANSITIONS.get(
-                current_state, set()
-            )
+            valid_next_states = DeploymentStateMachine.VALID_TRANSITIONS.get(current_state, set())
 
             if not valid_next_states:
                 raise StateTransitionError(
@@ -136,7 +152,7 @@ class DeploymentStateMachine:
             )
 
     @staticmethod
-    def get_valid_next_states(current_state: str) -> List[str]:
+    def get_valid_next_states(current_state: str) -> list[str]:
         """
         Get list of valid next states from current state.
 
@@ -256,7 +272,9 @@ class DeploymentStateMachine:
             next_states = DeploymentStateMachine.get_valid_next_states(state)
 
             terminal_marker = " [TERMINAL]" if DeploymentStateMachine.is_terminal(state) else ""
-            recovery_marker = " [RECOVERY]" if DeploymentStateMachine.requires_recovery(state) else ""
+            recovery_marker = (
+                " [RECOVERY]" if DeploymentStateMachine.requires_recovery(state) else ""
+            )
 
             lines.append(f"{state}{terminal_marker}{recovery_marker}")
 

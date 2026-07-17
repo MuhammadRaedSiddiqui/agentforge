@@ -7,7 +7,7 @@ redaction, request ID tracking, and typed receipts.
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import requests
 
@@ -22,23 +22,66 @@ from shared.redaction import redact_dict, sanitize_url
 
 
 @dataclass
+class AdapterReceipt:
+    """
+    Typed receipt for an adapter operation.
+
+    Returned by all adapter operations to provide evidence of execution.
+    """
+
+    platform: str  # Platform name (vapi, make, render, etc.)
+    operation: str  # Operation name (create_assistant, etc.)
+    remote_id: str | None  # Remote resource ID
+    status: str  # Operation status (success, failed, etc.)
+    response_data: dict[str, Any]  # Response data from operation
+    idempotency_key: str | None = None  # Idempotency key if applicable
+    can_retry: bool = False  # Whether operation is safe to retry
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert receipt to dictionary for storage."""
+        return {
+            "platform": self.platform,
+            "operation": self.operation,
+            "remote_id": self.remote_id,
+            "status": self.status,
+            "response_data": self.response_data,
+            "idempotency_key": self.idempotency_key,
+            "can_retry": self.can_retry,
+            "success": self.status == "success",
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        """Provide backwards-compatible dict-style access."""
+        return self.to_dict()[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Provide backwards-compatible dict-style access."""
+        return self.to_dict().get(key, default)
+
+    def __len__(self) -> int:
+        """Allow basic sized checks for legacy call sites."""
+        return len(self.to_dict())
+
+
+@dataclass
 class HTTPReceipt:
     """
     Typed receipt for a successful HTTP operation.
 
     Contains evidence of the operation and its result.
+    Legacy format - prefer AdapterReceipt for new code.
     """
 
     platform: str
     operation: str
-    request_id: Optional[str]
+    request_id: str | None
     http_status: int
-    remote_resource_id: Optional[str]
-    remote_version: Optional[str]
+    remote_resource_id: str | None
+    remote_version: str | None
     response_summary: str
     timestamp: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert receipt to dictionary for storage."""
         return {
             "platform": self.platform,
@@ -94,7 +137,7 @@ class BaseHTTPAdapter:
         # Create session for connection pooling
         self.session = requests.Session()
 
-    def _get_headers(self, additional_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    def _get_headers(self, additional_headers: dict[str, str] | None = None) -> dict[str, str]:
         """
         Get request headers with authorization.
 
@@ -116,8 +159,8 @@ class BaseHTTPAdapter:
         return headers
 
     def _classify_error(
-        self, response: Optional[requests.Response], exception: Optional[Exception]
-    ) -> Tuple[str, Exception]:
+        self, response: requests.Response | None, exception: Exception | None
+    ) -> tuple[str, Exception]:
         """
         Classify an error into a failure category.
 
@@ -155,7 +198,10 @@ class BaseHTTPAdapter:
 
             # Rate limiting and service unavailable are transient
             if status in (429, 503):
-                return ("transient", TransientError(f"HTTP {status}: Service temporarily unavailable"))
+                return (
+                    "transient",
+                    TransientError(f"HTTP {status}: Service temporarily unavailable"),
+                )
 
             # Server errors are transient
             if 500 <= status < 600:
@@ -207,9 +253,9 @@ class BaseHTTPAdapter:
         operation: str,
         is_read_only: bool = False,
         is_idempotent: bool = False,
-        json_data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None,
-        additional_headers: Optional[Dict[str, str]] = None,
+        json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        additional_headers: dict[str, str] | None = None,
     ) -> HTTPReceipt:
         """
         Make an HTTP request with retry logic.
@@ -281,14 +327,14 @@ class BaseHTTPAdapter:
                     raise typed_exception from e
 
                 # Wait before retry with exponential backoff
-                time.sleep(self.RETRY_DELAY * (2 ** attempt))
+                time.sleep(self.RETRY_DELAY * (2**attempt))
                 continue
 
         # Should never reach here, but raise last error if we do
         _, typed_exception = self._classify_error(last_response, last_error)
         raise typed_exception
 
-    def _extract_resource_id(self, response: requests.Response) -> Optional[str]:
+    def _extract_resource_id(self, response: requests.Response) -> str | None:
         """
         Extract resource ID from response (platform-specific).
 
@@ -302,11 +348,14 @@ class BaseHTTPAdapter:
         """
         try:
             data = response.json()
-            return data.get("id")
+            id_value = data.get("id")
+            if isinstance(id_value, str):
+                return id_value
+            return None
         except Exception:
             return None
 
-    def _extract_version(self, response: requests.Response) -> Optional[str]:
+    def _extract_version(self, response: requests.Response) -> str | None:
         """
         Extract version/etag from response (platform-specific).
 
@@ -338,6 +387,7 @@ class BaseHTTPAdapter:
 
             # Create bounded summary
             import json
+
             summary = json.dumps(sanitized)
 
             # Truncate if too long

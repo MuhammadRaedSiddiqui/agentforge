@@ -5,9 +5,10 @@ Tests that all required tables exist and basic operations work.
 """
 
 import os
-from dotenv import load_dotenv
-from supabase import create_client, Client
 
+from dotenv import load_dotenv
+
+from supabase import Client, create_client
 
 EXPECTED_TABLES = [
     "organizations",
@@ -53,16 +54,22 @@ def test_basic_operations(supabase: Client) -> bool:
         # Clean up any existing test data
         try:
             supabase.table("organizations").delete().eq("organization_id", test_org_id).execute()
-        except:
+        except Exception:
             pass
 
         # Insert
         print("  - INSERT test organization...")
-        insert_result = supabase.table("organizations").insert({
-            "organization_id": test_org_id,
-            "display_name": "Test Verification Org",
-            "status": "active"
-        }).execute()
+        insert_result = (
+            supabase.table("organizations")
+            .insert(
+                {
+                    "organization_id": test_org_id,
+                    "display_name": "Test Verification Org",
+                    "status": "active",
+                }
+            )
+            .execute()
+        )
 
         if not insert_result.data:
             print("    [FAIL] Insert returned no data")
@@ -71,9 +78,9 @@ def test_basic_operations(supabase: Client) -> bool:
 
         # Select
         print("  - SELECT test organization...")
-        select_result = supabase.table("organizations").select("*").eq(
-            "organization_id", test_org_id
-        ).execute()
+        select_result = (
+            supabase.table("organizations").select("*").eq("organization_id", test_org_id).execute()
+        )
 
         if not select_result.data or len(select_result.data) != 1:
             print("    [FAIL] Select returned unexpected data")
@@ -82,9 +89,12 @@ def test_basic_operations(supabase: Client) -> bool:
 
         # Update
         print("  - UPDATE test organization...")
-        update_result = supabase.table("organizations").update({
-            "display_name": "Updated Test Org"
-        }).eq("organization_id", test_org_id).execute()
+        update_result = (
+            supabase.table("organizations")
+            .update({"display_name": "Updated Test Org"})
+            .eq("organization_id", test_org_id)
+            .execute()
+        )
 
         if not update_result.data:
             print("    [FAIL] Update returned no data")
@@ -103,7 +113,7 @@ def test_basic_operations(supabase: Client) -> bool:
         # Clean up
         try:
             supabase.table("organizations").delete().eq("organization_id", test_org_id).execute()
-        except:
+        except Exception:
             pass
         return False
 
@@ -120,7 +130,9 @@ def main():
 
     if not url or not key:
         print("\n[FAIL] Environment variables not set")
-        print("       Please check SUPABASE_INTERNAL_URL and SUPABASE_INTERNAL_SERVICE_ROLE_KEY in .env")
+        print(
+            "       Please check SUPABASE_INTERNAL_URL and SUPABASE_INTERNAL_SERVICE_ROLE_KEY in .env"
+        )
         return
 
     print(f"\n[INFO] Connecting to: {url[:30]}...")
@@ -172,7 +184,7 @@ def main():
     print("VERIFICATION SUMMARY")
     print("=" * 70)
     print()
-    print(f"  Connection:        [OK]")
+    print("  Connection:        [OK]")
     print(f"  Tables Created:    [OK] {len(existing_tables)}/{len(EXPECTED_TABLES)}")
     print(f"  Basic Operations:  {'[OK]' if operations_ok else '[FAIL]'}")
     print()
@@ -181,7 +193,9 @@ def main():
         print("[SUCCESS] Your Supabase database is fully configured and working!")
         print()
         print("Next steps:")
-        print("  - Run integration tests: pytest tests/integration/test_internal_store.py -m integration -v")
+        print(
+            "  - Run integration tests: pytest tests/integration/test_internal_store.py -m integration -v"
+        )
         print("  - Complete remaining environment variables in .env")
     else:
         print("[WARNING] Tables exist but operations failed")

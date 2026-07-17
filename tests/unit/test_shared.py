@@ -4,10 +4,6 @@ Unit tests for shared utilities.
 Tests for errors, ids, hashing, and redaction modules.
 """
 
-import json
-import re
-from pathlib import Path
-
 import pytest
 
 from shared.errors import (
@@ -23,11 +19,7 @@ from shared.errors import (
     classify_error,
 )
 from shared.hashing import (
-    compute_audit_hash,
-    compute_display_hash,
-    compute_intake_hash,
     compute_proposal_hash,
-    compute_state_version,
     hash_content,
     hash_json,
     verify_hash,
@@ -45,7 +37,6 @@ from shared.redaction import (
     mask_value,
     redact_dict,
     redact_secrets,
-    sanitize_error_message,
     sanitize_url,
     scan_for_secrets,
     validate_no_secrets,

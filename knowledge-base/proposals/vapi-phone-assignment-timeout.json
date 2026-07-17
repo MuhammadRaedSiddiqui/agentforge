@@ -1,0 +1,10 @@
+{
+  "symptom": "Vapi phone assignment timeout",
+  "root_cause": "Test",
+  "resolution": "Test",
+  "platform": "vapi",
+  "topic": "phone",
+  "proposed_at": "2026-07-17T07:42:00.020746+00:00",
+  "verification_status": "proposed",
+  "requires_approval": true
+}

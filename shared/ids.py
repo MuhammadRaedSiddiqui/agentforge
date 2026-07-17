@@ -7,7 +7,6 @@ and other entities.
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 
 def generate_uuid() -> str:
@@ -20,9 +19,18 @@ def generate_uuid() -> str:
     return str(uuid.uuid4())
 
 
-def generate_task_id(
-    deployment_id: str, agent_target: str, sequence: int, attempt: int = 1
-) -> str:
+def generate_deployment_id() -> str:
+    """
+    Generate a unique deployment ID.
+
+    Returns:
+        String representation of UUID
+        (e.g., "550e8400-e29b-41d4-a716-446655440000")
+    """
+    return str(uuid.uuid4())
+
+
+def generate_task_id(deployment_id: str, agent_target: str, sequence: int, attempt: int = 1) -> str:
     """
     Generate a deterministic task ID.
 
@@ -66,7 +74,7 @@ def generate_knowledge_entry_id(source_path: str, content_hash: str) -> str:
 
 
 def generate_idempotency_key(
-    organization_id: str, operation: str, target: str, timestamp: Optional[str] = None
+    organization_id: str, operation: str, target: str, timestamp: str | None = None
 ) -> str:
     """
     Generate an idempotency key for external operations.

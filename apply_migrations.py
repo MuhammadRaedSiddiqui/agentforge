@@ -6,8 +6,10 @@ Reads migration files in order and executes them.
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
-from supabase import create_client, Client
+
+from supabase import Client, create_client
 
 
 def main():
@@ -63,7 +65,7 @@ def main():
 
             # For now, we'll use psycopg2 if available, or provide instructions
             try:
-                import psycopg2
+                import psycopg2  # noqa: F401
 
                 # Extract connection details from Supabase URL
                 # Format: https://PROJECT_REF.supabase.co
@@ -71,17 +73,17 @@ def main():
 
                 # Supabase uses direct postgres connection
                 # Connection string format for Supabase
-                print(f"[INFO] Attempting direct postgres connection...")
-                print(f"[WARN] This requires the database password, not the service role key")
-                print(f"[SKIP] Direct SQL execution not supported via service role key")
-                print(f"       Please apply migrations manually via Supabase Dashboard")
-                print(f"       Or use Supabase CLI: supabase db push")
+                print("[INFO] Attempting direct postgres connection...")
+                print("[WARN] This requires the database password, not the service role key")
+                print("[SKIP] Direct SQL execution not supported via service role key")
+                print("       Please apply migrations manually via Supabase Dashboard")
+                print("       Or use Supabase CLI: supabase db push")
                 break
 
             except ImportError:
-                print(f"[SKIP] psycopg2 not installed")
-                print(f"       Please apply migrations manually via Supabase Dashboard")
-                print(f"       Or install Supabase CLI: npm install -g supabase")
+                print("[SKIP] psycopg2 not installed")
+                print("       Please apply migrations manually via Supabase Dashboard")
+                print("       Or install Supabase CLI: npm install -g supabase")
                 break
 
         except Exception as e:

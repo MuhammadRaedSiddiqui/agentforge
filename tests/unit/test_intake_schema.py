@@ -7,7 +7,7 @@ required fields.
 
 import pytest
 
-from orchestrator.intake_schema import IntakeSchema, validate_intake
+from orchestrator.intake_schema import validate_intake
 
 
 @pytest.mark.unit
@@ -22,12 +22,8 @@ class TestIntakeSchema:
             "phone_number": "+15555550100",
             "voice_id": "test_voice_id",
             "timezone": "America/New_York",
-            "business_hours": {
-                "monday": [{"open": "09:00", "close": "17:00"}]
-            },
-            "services_offered": [
-                {"name": "Consultation", "duration_minutes": 30}
-            ],
+            "business_hours": {"monday": [{"open": "09:00", "close": "17:00"}]},
+            "services_offered": [{"name": "Consultation", "duration_minutes": 30}],
             "enabled_capabilities": ["availability"],
             "external_identifiers": {},
         }
@@ -88,8 +84,9 @@ class TestIntakeSchema:
 
         result = validate_intake(intake)
         assert result["valid"] is False
-        assert any("phone" in str(err).lower() and "format" in str(err).lower()
-                   for err in result["errors"])
+        assert any(
+            "phone" in str(err).lower() and "format" in str(err).lower() for err in result["errors"]
+        )
 
     def test_invalid_timezone(self) -> None:
         """Should reject invalid IANA timezone."""
@@ -145,8 +142,7 @@ class TestIntakeSchema:
 
         result = validate_intake(intake)
         assert result["valid"] is False
-        assert any("cancellation_window_hours" in str(err).lower()
-                   for err in result["errors"])
+        assert any("cancellation_window_hours" in str(err).lower() for err in result["errors"])
 
     def test_rescheduling_capability_requires_policy(self) -> None:
         """Should require rescheduling_policy when rescheduling enabled."""

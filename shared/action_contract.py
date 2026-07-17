@@ -6,7 +6,7 @@ reconciliation and compensation metadata.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
@@ -20,16 +20,16 @@ class ActionContract:
 
     platform: str
     operation: str
-    target: Dict[str, Any]
+    target: dict[str, Any]
     payload_hash: str
     state_version: str
-    idempotency_key: Optional[str]
-    retry_policy: Dict[str, Any]
+    idempotency_key: str | None
+    retry_policy: dict[str, Any]
     reconciliation_strategy: str
-    compensation_operation: Optional[str]
+    compensation_operation: str | None
 
     # Optional metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate action contract after initialization."""
@@ -51,9 +51,7 @@ class ActionContract:
         # Validate platform
         valid_platforms = ["vapi", "make", "supabase_client", "hosting"]
         if self.platform not in valid_platforms:
-            raise ValueError(
-                f"Invalid platform: {self.platform}. Must be one of {valid_platforms}"
-            )
+            raise ValueError(f"Invalid platform: {self.platform}. Must be one of {valid_platforms}")
 
         # Validate retry policy structure
         if "max_retries" not in self.retry_policy:
@@ -61,7 +59,7 @@ class ActionContract:
         if "retry_delay_seconds" not in self.retry_policy:
             raise ValueError("retry_policy must contain 'retry_delay_seconds'")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert to dictionary for serialization.
 
@@ -82,7 +80,7 @@ class ActionContract:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ActionContract":
+    def from_dict(cls, data: dict[str, Any]) -> "ActionContract":
         """
         Create ActionContract from dictionary.
 
@@ -130,7 +128,8 @@ class ActionContract:
         Returns:
             True if max_retries > 0
         """
-        return self.retry_policy.get("max_retries", 0) > 0
+        max_retries: int = self.retry_policy.get("max_retries", 0)
+        return max_retries > 0
 
     def is_read_only(self) -> bool:
         """
@@ -177,7 +176,8 @@ class ActionContract:
         Returns:
             Maximum number of retries allowed
         """
-        return self.retry_policy.get("max_retries", 0)
+        max_retries: int = self.retry_policy.get("max_retries", 0)
+        return max_retries
 
     def get_retry_delay(self) -> float:
         """
@@ -186,4 +186,5 @@ class ActionContract:
         Returns:
             Delay between retries in seconds
         """
-        return self.retry_policy.get("retry_delay_seconds", 0.0)
+        delay: float = self.retry_policy.get("retry_delay_seconds", 0.0)
+        return delay

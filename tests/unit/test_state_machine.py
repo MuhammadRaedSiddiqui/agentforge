@@ -16,27 +16,19 @@ class TestDeploymentStateMachine:
 
     def test_valid_transition_planning_to_awaiting_plan_approval(self) -> None:
         """Should allow planning -> awaiting_plan_approval."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "planning", "awaiting_plan_approval"
-        )
+        assert DeploymentStateMachine.is_valid_transition("planning", "awaiting_plan_approval")
 
     def test_valid_transition_awaiting_plan_approval_to_generating(self) -> None:
         """Should allow awaiting_plan_approval -> generating."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "awaiting_plan_approval", "generating"
-        )
+        assert DeploymentStateMachine.is_valid_transition("awaiting_plan_approval", "generating")
 
     def test_valid_transition_generating_to_awaiting_action_approval(self) -> None:
         """Should allow generating -> awaiting_action_approval."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "generating", "awaiting_action_approval"
-        )
+        assert DeploymentStateMachine.is_valid_transition("generating", "awaiting_action_approval")
 
     def test_valid_transition_awaiting_action_to_executing(self) -> None:
         """Should allow awaiting_action_approval -> executing."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "awaiting_action_approval", "executing"
-        )
+        assert DeploymentStateMachine.is_valid_transition("awaiting_action_approval", "executing")
 
     def test_valid_transition_executing_to_verifying(self) -> None:
         """Should allow executing -> verifying."""
@@ -48,27 +40,19 @@ class TestDeploymentStateMachine:
 
     def test_valid_transition_executing_to_recovery_required(self) -> None:
         """Should allow executing -> recovery_required on failure."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "executing", "recovery_required"
-        )
+        assert DeploymentStateMachine.is_valid_transition("executing", "recovery_required")
 
     def test_valid_transition_recovery_required_to_executing(self) -> None:
         """Should allow recovery_required -> executing for retry."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "recovery_required", "executing"
-        )
+        assert DeploymentStateMachine.is_valid_transition("recovery_required", "executing")
 
     def test_valid_transition_recovery_required_to_compensating(self) -> None:
         """Should allow recovery_required -> compensating."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "recovery_required", "compensating"
-        )
+        assert DeploymentStateMachine.is_valid_transition("recovery_required", "compensating")
 
     def test_valid_transition_revision_flow(self) -> None:
         """Should allow awaiting_action_approval -> generating for revision."""
-        assert DeploymentStateMachine.is_valid_transition(
-            "awaiting_action_approval", "generating"
-        )
+        assert DeploymentStateMachine.is_valid_transition("awaiting_action_approval", "generating")
 
     def test_valid_transition_abort_from_planning(self) -> None:
         """Should allow aborting from planning."""
@@ -163,27 +147,17 @@ class TestDeploymentStateMachine:
 
     def test_can_start_new_deployment_recovery_only(self) -> None:
         """Should allow recovery_only in recovery states."""
-        assert DeploymentStateMachine.can_start_new_deployment(
-            "recovery_required", "recovery_only"
-        )
-        assert not DeploymentStateMachine.can_start_new_deployment(
-            "complete", "recovery_only"
-        )
+        assert DeploymentStateMachine.can_start_new_deployment("recovery_required", "recovery_only")
+        assert not DeploymentStateMachine.can_start_new_deployment("complete", "recovery_only")
 
     def test_can_start_new_deployment_modifying_blocked(self) -> None:
         """Should block new modifying deployments when one is active."""
-        assert not DeploymentStateMachine.can_start_new_deployment(
-            "executing", "new_onboarding"
-        )
-        assert not DeploymentStateMachine.can_start_new_deployment(
-            "generating", "update_assistant"
-        )
+        assert not DeploymentStateMachine.can_start_new_deployment("executing", "new_onboarding")
+        assert not DeploymentStateMachine.can_start_new_deployment("generating", "update_assistant")
 
     def test_can_start_new_deployment_after_terminal(self) -> None:
         """Should allow new deployments after terminal state."""
-        assert DeploymentStateMachine.can_start_new_deployment(
-            "complete", "new_onboarding"
-        )
+        assert DeploymentStateMachine.can_start_new_deployment("complete", "new_onboarding")
         assert DeploymentStateMachine.can_start_new_deployment("failed", "new_onboarding")
 
     def test_get_state_description(self) -> None:

@@ -5,9 +5,9 @@ Scans content for secret patterns and masks them before logging,
 displaying, or persisting.
 """
 
+import json
 import re
-from typing import Any, Dict, List, Optional, Union
-
+from typing import Any
 
 # Secret patterns to detect
 SECRET_PATTERNS = [
@@ -15,32 +15,29 @@ SECRET_PATTERNS = [
     (r"sk-[a-zA-Z0-9]{10,}", "sk-***"),
     (r"pk-[a-zA-Z0-9]{10,}", "pk-***"),
     (r"Bearer\s+[a-zA-Z0-9\-._~+/]+=*", "Bearer ***"),
-
     # Generic API keys and tokens (match 10+ chars)
     (r"api[_-]?key['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9\-._~+/]{10,})['\"]?", "api_key=***"),
     (r"token['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9\-._~+/]{10,})['\"]?", "token=***"),
     (r"secret['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9\-._~+/]{10,})['\"]?", "secret=***"),
     (r"password['\"]?\s*[:=]\s*['\"]?([^\s'\"]{8,})['\"]?", "password=***"),
-
     # Authorization headers
-    (r"Authorization:\s*[^\r\n]+", "Authorization: ***"),
-
+    (r"Authorization:\s*[^\r\n]+", "Authorization: [REDACTED] ***"),
     # AWS-style keys
     (r"AKIA[0-9A-Z]{16}", "AKIA***"),
-    (r"(?:aws_access_key_id|aws_secret_access_key)['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9/+=]{20,})['\"]?", "aws_***=***"),
-
+    (
+        r"(?:aws_access_key_id|aws_secret_access_key)['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9/+=]{20,})['\"]?",
+        "aws_***=***",
+    ),
     # Google API keys
     (r"AIza[0-9A-Za-z\-_]{35}", "AIza***"),
-
     # Supabase keys (service role keys are especially sensitive)
     (r"eyJ[a-zA-Z0-9\-_]+\.eyJ[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+", "eyJ***"),
-
     # Generic base64 encoded secrets (20+ chars)
     (r"['\"]([A-Za-z0-9+/]{40,}={0,2})['\"]", "***"),
 ]
 
 
-def scan_for_secrets(content: str) -> List[Dict[str, Any]]:
+def scan_for_secrets(content: str) -> list[dict[str, Any]]:
     """
     Scan content for potential secrets.
 
@@ -55,13 +52,15 @@ def scan_for_secrets(content: str) -> List[Dict[str, Any]]:
     for pattern, _replacement in SECRET_PATTERNS:
         matches = re.finditer(pattern, content, re.IGNORECASE)
         for match in matches:
-            findings.append({
-                "pattern": pattern,
-                "matched_text": match.group(0),
-                "start": match.start(),
-                "end": match.end(),
-                "line": content[:match.start()].count("\n") + 1,
-            })
+            findings.append(
+                {
+                    "pattern": pattern,
+                    "matched_text": match.group(0),
+                    "start": match.start(),
+                    "end": match.end(),
+                    "line": content[: match.start()].count("\n") + 1,
+                }
+            )
 
     return findings
 
@@ -76,15 +75,78 @@ def redact_secrets(content: str) -> str:
     Returns:
         Content with secrets replaced by masked placeholders
     """
+    # JSON exports can be sanitized precisely by key while retaining valid JSON.
+    # This also avoids fragile regex substitutions over quoted JSON strings.
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError):
+        parsed = None
+    else:
+        if isinstance(parsed, (dict, list)):
+            return json.dumps(_redact_json_value(parsed))
+
     redacted = content
 
     for pattern, replacement in SECRET_PATTERNS:
         redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
 
+    # Values in environment-style assignments and URL credentials are secrets
+    # even when their names do not match a vendor-specific pattern.
+    redacted = re.sub(
+        r"(?im)(\b[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*\s*=\s*)[^\s]+",
+        r"\1[REDACTED]",
+        redacted,
+    )
+    redacted = re.sub(
+        r"([a-z][a-z0-9+.-]*://[^\s:/@]+:)[^\s@]+(@)",
+        r"\1[REDACTED]\2",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+    redacted = re.sub(r"\bsk_[A-Za-z0-9_-]+", "[REDACTED]", redacted)
+
     return redacted
 
 
-def redact_dict(data: Dict[str, Any], sensitive_keys: Optional[List[str]] = None) -> Dict[str, Any]:
+def _redact_json_value(value: Any, key: str | None = None) -> Any:
+    """Recursively redact sensitive JSON values without corrupting its syntax."""
+    sensitive = (
+        "api_key",
+        "apikey",
+        "api-key",
+        "secret",
+        "token",
+        "password",
+        "credential",
+        "authorization",
+        "auth",
+    )
+    if isinstance(value, dict):
+        return {
+            item_key: _redact_json_value(
+                item_value, item_key if isinstance(item_key, str) else None
+            )
+            for item_key, item_value in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_json_value(item) for item in value]
+    if isinstance(value, str):
+        if key and any(term in key.lower() for term in sensitive):
+            return "[REDACTED]"
+        return _redact_plain_text(value)
+    return value
+
+
+def _redact_plain_text(content: str) -> str:
+    """Apply text patterns without attempting to parse structured content."""
+    redacted = content
+    for pattern, replacement in SECRET_PATTERNS:
+        redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
+    redacted = re.sub(r"\bsk_[A-Za-z0-9_-]+", "[REDACTED]", redacted)
+    return redacted
+
+
+def redact_dict(data: dict[str, Any], sensitive_keys: list[str] | None = None) -> dict[str, Any]:
     """
     Redact sensitive values from a dictionary.
 
@@ -100,17 +162,27 @@ def redact_dict(data: Dict[str, Any], sensitive_keys: Optional[List[str]] = None
 
     # Default sensitive key patterns
     default_sensitive = [
-        "api_key", "apikey", "api-key",
-        "secret", "token", "password", "passwd",
-        "authorization", "auth",
-        "key", "private_key", "privatekey",
-        "credential", "credentials",
-        "service_role_key", "anon_key",
+        "api_key",
+        "apikey",
+        "api-key",
+        "secret",
+        "token",
+        "password",
+        "passwd",
+        "authorization",
+        "auth",
+        "key",
+        "private_key",
+        "privatekey",
+        "credential",
+        "credentials",
+        "service_role_key",
+        "anon_key",
     ]
 
     all_sensitive = set(k.lower() for k in default_sensitive + sensitive_keys)
 
-    redacted = {}
+    redacted: dict[str, Any] = {}
     for key, value in data.items():
         key_lower = key.lower()
 
@@ -156,7 +228,7 @@ def mask_value(value: str, visible_chars: int = 4) -> str:
     return f"{value[:visible_chars]}***"
 
 
-def validate_no_secrets(content: Union[str, Dict[str, Any]]) -> bool:
+def validate_no_secrets(content: str | dict[str, Any]) -> bool:
     """
     Validate that content contains no detectable secrets.
 
@@ -169,6 +241,7 @@ def validate_no_secrets(content: Union[str, Dict[str, Any]]) -> bool:
     if isinstance(content, dict):
         # Convert dict to JSON string for scanning
         import json
+
         content_str = json.dumps(content, indent=2)
     else:
         content_str = content
@@ -203,18 +276,14 @@ def sanitize_url(url: str) -> str:
     """
     # Remove basic auth credentials from URLs
     # https://user:pass@example.com -> https://***@example.com
-    sanitized = re.sub(
-        r"(https?://)([^:]+):([^@]+)@",
-        r"\1***:***@",
-        url
-    )
+    sanitized = re.sub(r"(https?://)([^:]+):([^@]+)@", r"\1***:***@", url)
 
     # Remove query string parameters that look like secrets
     sanitized = re.sub(
         r"([?&])(api_?key|token|secret|password|key)=[^&]+",
         r"\1\2=***",
         sanitized,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
 
     return sanitized

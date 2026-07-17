@@ -4,14 +4,15 @@ CLI session management for Agent Forge.
 Manages session lifecycle, organization scoping, and lock acquisition.
 """
 
+import time
 import uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any
 
 from adapters.supabase_internal import SupabaseInternalClient
-from cli.config import AgentForgeConfig
+from cli.config import AgentForgeConfig, load_config
 from orchestrator.deployment_lookup import DeploymentLookup
-from orchestrator.org_lock import OrganizationLock, LockInfo
+from orchestrator.org_lock import LockInfo, OrganizationLock
 from shared.errors import OrganizationLockError
 
 
@@ -21,8 +22,8 @@ class Session:
 
     session_id: str
     operator_id: str
-    organization_id: Optional[str]
-    lock_info: Optional[LockInfo]
+    organization_id: str | None
+    lock_info: LockInfo | None
     started_at: float
 
 
@@ -36,8 +37,8 @@ class SessionManager:
 
     def __init__(
         self,
-        config: AgentForgeConfig,
-        internal_client: SupabaseInternalClient,
+        config: AgentForgeConfig | SupabaseInternalClient,
+        internal_client: SupabaseInternalClient | None = None,
     ):
         """
         Initialize session manager.
@@ -46,14 +47,22 @@ class SessionManager:
             config: Agent Forge configuration
             internal_client: Supabase internal client
         """
-        self.config = config
-        self.internal_client = internal_client
+        if isinstance(config, SupabaseInternalClient):
+            self.config = load_config()
+            self.internal_client = config
+        else:
+            self.config = config
+            self.internal_client = internal_client or SupabaseInternalClient(config)
         self.org_lock = OrganizationLock()
-        self.deployment_lookup = DeploymentLookup(internal_client)
+        self.deployment_lookup = DeploymentLookup(self.internal_client)
 
-        self.active_session: Optional[Session] = None
+        self.active_session: Session | None = None
 
-    def start_session(self, operator_id: str = "operator") -> Session:
+    def start_session(
+        self,
+        organization_id: str | None = None,
+        operator_id: str = "operator",
+    ) -> Session:
         """
         Start a new session.
 
@@ -68,8 +77,6 @@ class SessionManager:
         """
         if self.active_session:
             raise ValueError("Session already active. End current session first.")
-
-        import time
 
         session_id = str(uuid.uuid4())
 
@@ -93,6 +100,9 @@ class SessionManager:
         )
 
         self.active_session = session
+
+        if organization_id:
+            self.scope_to_organization(organization_id)
 
         return session
 
@@ -124,9 +134,7 @@ class SessionManager:
         )
 
         if not can_start["can_start"] and not force_takeover:
-            raise OrganizationLockError(
-                f"Cannot scope to organization: {can_start['reason']}"
-            )
+            raise OrganizationLockError(f"Cannot scope to organization: {can_start['reason']}")
 
         # Acquire lock
         lock_info = self.org_lock.acquire(
@@ -141,13 +149,14 @@ class SessionManager:
 
         return lock_info
 
-    def end_session(self, end_reason: str = "complete") -> None:
+    def end_session(self, end_reason: str | Session = "complete") -> None:
         """
         End active session and release locks.
 
         Args:
             end_reason: Reason for ending session
         """
+        resolved_reason = end_reason if isinstance(end_reason, str) else "complete"
         if not self.active_session:
             return
 
@@ -162,15 +171,13 @@ class SessionManager:
                 pass  # Best effort
 
         # Update session record
-        import time
-
         try:
             self.internal_client.update(
                 "sessions",
                 {"session_id": self.active_session.session_id},
                 {
                     "ended_at": time.time(),
-                    "end_reason": end_reason,
+                    "end_reason": resolved_reason,
                 },
             )
         except Exception:
@@ -178,18 +185,15 @@ class SessionManager:
 
         self.active_session = None
 
-    def get_session(self) -> Optional[Session]:
+    def get_session(self) -> Session | None:
         """Get active session."""
         return self.active_session
 
     def is_scoped(self) -> bool:
         """Check if session is scoped to an organization."""
-        return (
-            self.active_session is not None
-            and self.active_session.organization_id is not None
-        )
+        return self.active_session is not None and self.active_session.organization_id is not None
 
-    def get_organization_id(self) -> Optional[str]:
+    def get_organization_id(self) -> str | None:
         """Get scoped organization ID."""
         if self.active_session:
             return self.active_session.organization_id
@@ -210,6 +214,7 @@ class SessionManager:
     def _get_process_id(self) -> int:
         """Get current process ID."""
         import os
+
         return os.getpid()
 
     def _get_host_fingerprint(self) -> str:
@@ -228,7 +233,7 @@ class SessionManager:
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - ensure session cleanup."""
         if exc_type:
             self.end_session(end_reason="error")

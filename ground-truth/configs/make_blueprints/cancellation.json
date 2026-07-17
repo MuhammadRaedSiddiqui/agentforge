@@ -1,0 +1,257 @@
+{
+  "name": "{{organization_display_name}} - Appointment Cancellation",
+  "description": "Process appointment cancellation requests from Vapi assistant and update appointment status in the client's Supabase database",
+  "teamId": "{{make_team_id}}",
+  "scheduling": {
+    "type": "immediately"
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "{{cancellation_hook_id}}",
+        "dataStructure": {
+          "appointment_id": "string",
+          "phone": "string",
+          "reason": "string"
+        }
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {},
+        "expect": [
+          {
+            "name": "appointment_id",
+            "type": "text",
+            "label": "Appointment ID",
+            "required": true
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "label": "Phone",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "type": "text",
+            "label": "Reason",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "supabase:ActionSelectRows",
+      "version": 1,
+      "parameters": {
+        "connection": "{{supabase_connection_id}}",
+        "table": "appointments",
+        "select": "*",
+        "filter": [
+          {
+            "column": "organization_id",
+            "operator": "eq",
+            "value": "{{organization_id}}"
+          },
+          {
+            "column": "appointment_id",
+            "operator": "eq",
+            "value": "{{1.appointment_id}}"
+          },
+          {
+            "column": "client_phone",
+            "operator": "eq",
+            "value": "{{1.phone}}"
+          },
+          {
+            "column": "status",
+            "operator": "neq",
+            "value": "cancelled"
+          }
+        ],
+        "limit": 1
+      },
+      "mapper": {
+        "appointment_id": "{{1.appointment_id}}",
+        "phone": "{{1.phone}}",
+        "organization_id": "{{organization_id}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 4,
+              "module": "supabase:ActionUpdateRows",
+              "version": 1,
+              "parameters": {
+                "connection": "{{supabase_connection_id}}",
+                "table": "appointments",
+                "filter": [
+                  {
+                    "column": "appointment_id",
+                    "operator": "eq",
+                    "value": "{{1.appointment_id}}"
+                  }
+                ]
+              },
+              "mapper": {
+                "status": "cancelled",
+                "cancellation_reason": "{{1.reason}}",
+                "cancelled_at": "{{now}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": -100
+                }
+              }
+            },
+            {
+              "id": 5,
+              "module": "supabase:ActionUpdateRows",
+              "version": 1,
+              "parameters": {
+                "connection": "{{supabase_connection_id}}",
+                "table": "availability_slots",
+                "filter": [
+                  {
+                    "column": "organization_id",
+                    "operator": "eq",
+                    "value": "{{organization_id}}"
+                  },
+                  {
+                    "column": "appointment_id",
+                    "operator": "eq",
+                    "value": "{{1.appointment_id}}"
+                  }
+                ]
+              },
+              "mapper": {
+                "is_available": "true",
+                "appointment_id": null
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": -100
+                }
+              }
+            },
+            {
+              "id": 6,
+              "module": "json:TransformToJSON",
+              "version": 1,
+              "parameters": {
+                "type": "object"
+              },
+              "mapper": {
+                "success": true,
+                "appointment_id": "{{1.appointment_id}}",
+                "message": "Appointment cancelled successfully",
+                "organization_id": "{{organization_id}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": -100
+                }
+              }
+            }
+          ],
+          "condition": "{{length(2.rows) > 0}}"
+        },
+        {
+          "flow": [
+            {
+              "id": 7,
+              "module": "json:TransformToJSON",
+              "version": 1,
+              "parameters": {
+                "type": "object"
+              },
+              "mapper": {
+                "success": false,
+                "error": "Appointment not found or already cancelled",
+                "appointment_id": "{{1.appointment_id}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 100
+                }
+              }
+            }
+          ],
+          "condition": "{{length(2.rows) == 0}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useQuerystring": false,
+        "parseResponse": true,
+        "timeout": 300,
+        "serializeUrl": false
+      },
+      "mapper": {
+        "url": "{{1.__IMTHOOK__.url}}",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "body": "{{ifempty(6.json, 7.json)}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": "{{organization_id}}_cancellation",
+    "organization_id": "{{organization_id}}",
+    "capability": "cancellation",
+    "template_version": "1.0.0",
+    "designer": {
+      "orphans": []
+    }
+  }
+}

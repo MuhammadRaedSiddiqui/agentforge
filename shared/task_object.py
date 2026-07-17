@@ -5,7 +5,7 @@ Represents one deterministic delegation to a specialist domain.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 
 @dataclass
@@ -21,14 +21,14 @@ class TaskObject:
     agent_target: str
     action_type: str
     context_hash: str
-    constraints: List[str]
-    dependencies: List[str]
+    constraints: list[str]
+    dependencies: list[str]
     verification_required: bool
     status: str = "pending"
     attempt_number: int = 1
 
     # Optional metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate task object after initialization."""
@@ -60,7 +60,7 @@ class TaskObject:
         if self.attempt_number < 1:
             raise ValueError("attempt_number must be >= 1")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert to dictionary for serialization.
 
@@ -82,7 +82,7 @@ class TaskObject:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TaskObject":
+    def from_dict(cls, data: dict[str, Any]) -> "TaskObject":
         """
         Create TaskObject from dictionary.
 

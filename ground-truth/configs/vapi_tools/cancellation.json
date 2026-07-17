@@ -1,0 +1,45 @@
+{
+  "type": "function",
+  "function": {
+    "name": "cancel_appointment",
+    "description": "Cancel an existing appointment for {{organization_display_name}}. Requires the appointment ID and verification phone number.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "appointment_id": {
+          "type": "string",
+          "description": "The unique identifier for the appointment to cancel",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "phone": {
+          "type": "string",
+          "description": "The phone number used when booking (for verification)",
+          "pattern": "^\\+[1-9]\\d{1,14}$"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional reason for cancellation",
+          "maxLength": 200
+        }
+      },
+      "required": ["appointment_id", "phone"]
+    }
+  },
+  "async": false,
+  "server": {
+    "url": "{{server_url}}/webhook/{{organization_id}}/cancellation",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Organization-ID": "{{organization_id}}"
+    }
+  },
+  "metadata": {
+    "capability": "cancellation",
+    "organization_id": "{{organization_id}}",
+    "template_version": "1.0.0",
+    "requires_auth": true,
+    "deletes_resource": true
+  }
+}

@@ -154,11 +154,11 @@ ALTER TABLE deployments ADD CONSTRAINT deployments_intake_required
         (intent NOT IN ('status_only', 'recovery_only') AND intake_id IS NOT NULL)
     );
 
--- Check constraint: plan_hash required after planning
+-- A plan hash is required after planning. Terminal failed/aborted records
+-- without a plan represent failures before plan persistence.
 ALTER TABLE deployments ADD CONSTRAINT deployments_plan_hash_required
     CHECK (
-        (status IN ('planning') AND plan_hash IS NULL) OR
-        (status NOT IN ('planning') AND plan_hash IS NOT NULL)
+        plan_hash IS NOT NULL OR status IN ('planning', 'failed', 'aborted')
     );
 
 -- Check constraint: completed_at only for terminal states
@@ -761,6 +761,18 @@ CREATE INDEX IF NOT EXISTS approval_decisions_operator_id_idx
     ON approval_decisions(operator_id, decided_at DESC);
 CREATE INDEX IF NOT EXISTS approval_decisions_decision_idx
     ON approval_decisions(decision);
+
+-- Migration: 013_approval_decision_compatibility.sql
+ALTER TABLE approval_decisions
+    ALTER COLUMN proposed_action_id DROP NOT NULL;
+
+ALTER TABLE approval_decisions
+    ADD COLUMN IF NOT EXISTS deployment_id UUID REFERENCES deployments(deployment_id),
+    ADD COLUMN IF NOT EXISTS decided_by TEXT,
+    ADD COLUMN IF NOT EXISTS notes TEXT;
+
+CREATE INDEX IF NOT EXISTS approval_decisions_deployment_id_idx
+    ON approval_decisions(deployment_id, decided_at DESC);
 
 -- Additional indexes for external_request_attempts
 CREATE INDEX IF NOT EXISTS external_request_attempts_outcome_idx

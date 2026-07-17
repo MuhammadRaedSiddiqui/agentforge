@@ -5,10 +5,8 @@ Loads environment variables, validates presence, and provides redacted display.
 """
 
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -31,7 +29,7 @@ class AgentForgeConfig:
     supabase_client_service_role_key: str
     supabase_internal_url: str
     supabase_internal_service_role_key: str
-    supabase_project_ref_staging: Optional[str]
+    supabase_project_ref_staging: str | None
 
     # Hosting provider
     hosting_api_token: str
@@ -89,7 +87,7 @@ def _check_production_identifiers(config: AgentForgeConfig) -> list[str]:
     Returns:
         List of warning messages for production-looking values
     """
-    warnings = []
+    warnings: list[str] = []
 
     if not config.is_staging:
         return warnings
@@ -108,14 +106,12 @@ def _check_production_identifiers(config: AgentForgeConfig) -> list[str]:
         lower_value = field_value.lower()
         for keyword in production_keywords:
             if keyword in lower_value:
-                warnings.append(
-                    f"⚠️  {field_name} contains '{keyword}' but AGENT_FORGE_ENV=staging"
-                )
+                warnings.append(f"⚠️  {field_name} contains '{keyword}' but AGENT_FORGE_ENV=staging")
 
     return warnings
 
 
-def load_config(env_file: Optional[str] = None) -> AgentForgeConfig:
+def load_config(env_file: str | None = None) -> AgentForgeConfig:
     """
     Load and validate Agent Forge configuration from environment.
 
@@ -166,7 +162,7 @@ def load_config(env_file: Optional[str] = None) -> AgentForgeConfig:
 
     # Check for missing required variables
     missing_vars = []
-    config_values = {}
+    config_values: dict[str, str | None] = {}
 
     for env_var, field_name in required_vars.items():
         value = os.getenv(env_var)
@@ -185,7 +181,27 @@ def load_config(env_file: Optional[str] = None) -> AgentForgeConfig:
         config_values[field_name] = os.getenv(env_var)
 
     # Create config instance
-    config = AgentForgeConfig(**config_values)
+    config = AgentForgeConfig(
+        gemini_api_key=config_values["gemini_api_key"] or "",
+        vapi_api_key=config_values["vapi_api_key"] or "",
+        make_api_token=config_values["make_api_token"] or "",
+        make_team_id=config_values["make_team_id"] or "",
+        make_zone=config_values["make_zone"] or "",
+        supabase_client_url=config_values["supabase_client_url"] or "",
+        supabase_client_service_role_key=config_values["supabase_client_service_role_key"] or "",
+        supabase_internal_url=config_values["supabase_internal_url"] or "",
+        supabase_internal_service_role_key=config_values["supabase_internal_service_role_key"]
+        or "",
+        supabase_project_ref_staging=config_values["supabase_project_ref_staging"],
+        hosting_api_token=config_values["hosting_api_token"] or "",
+        hosting_service_id=config_values["hosting_service_id"] or "",
+        hosting_health_url=config_values["hosting_health_url"] or "",
+        brave_search_api_key=config_values["brave_search_api_key"] or "",
+        chroma_persist_dir=config_values["chroma_persist_dir"] or "",
+        server_source_path=config_values["server_source_path"] or "",
+        server_test_command=config_values["server_test_command"] or "",
+        agent_forge_env=config_values["agent_forge_env"] or "",
+    )
 
     # Validate AGENT_FORGE_ENV
     if config.agent_forge_env not in ["staging", "production"]:
@@ -196,9 +212,7 @@ def load_config(env_file: Optional[str] = None) -> AgentForgeConfig:
     # Validate MAKE_ZONE
     valid_zones = ["eu1", "eu2", "us1", "us2"]
     if config.make_zone not in valid_zones:
-        raise ConfigurationError(
-            f"MAKE_ZONE must be one of {valid_zones}, got: {config.make_zone}"
-        )
+        raise ConfigurationError(f"MAKE_ZONE must be one of {valid_zones}, got: {config.make_zone}")
 
     # Validate URLs
     if not config.hosting_health_url.startswith("https://"):
@@ -209,9 +223,7 @@ def load_config(env_file: Optional[str] = None) -> AgentForgeConfig:
     # Check for production identifiers in staging mode
     prod_warnings = _check_production_identifiers(config)
     if prod_warnings:
-        error_msg = "\n".join(
-            ["Production identifiers detected in staging mode:"] + prod_warnings
-        )
+        error_msg = "\n".join(["Production identifiers detected in staging mode:"] + prod_warnings)
         raise ConfigurationError(error_msg)
 
     return config

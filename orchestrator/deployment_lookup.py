@@ -4,7 +4,7 @@ Deployment lookup for existing or partial deployments.
 Checks for existing deployments and their status before allowing new work.
 """
 
-from typing import Dict, List, Optional
+from typing import Any
 
 from adapters.supabase_internal import SupabaseInternalClient
 from orchestrator.state_machine import DeploymentStateMachine
@@ -27,9 +27,7 @@ class DeploymentLookup:
         """
         self.client = internal_client
 
-    def get_latest_deployment(
-        self, organization_id: str
-    ) -> Optional[Dict[str, any]]:
+    def get_latest_deployment(self, organization_id: str) -> dict[str, Any] | None:
         """
         Get latest deployment for organization.
 
@@ -51,9 +49,7 @@ class DeploymentLookup:
 
         return None
 
-    def get_active_deployment(
-        self, organization_id: str
-    ) -> Optional[Dict[str, any]]:
+    def get_active_deployment(self, organization_id: str) -> dict[str, Any] | None:
         """
         Get active (non-terminal) deployment for organization.
 
@@ -69,6 +65,8 @@ class DeploymentLookup:
             return None
 
         status = latest.get("status")
+        if not isinstance(status, str):
+            return None
 
         # Check if terminal
         if DeploymentStateMachine.is_terminal(status):
@@ -94,13 +92,16 @@ class DeploymentLookup:
         status = latest.get("status")
 
         # Check if in recovery state
+        if not isinstance(status, str):
+            return False
+
         if not DeploymentStateMachine.requires_recovery(status):
             return False
 
         # Check for unresolved recovery actions
         deployment_id = latest.get("deployment_id")
 
-        if not deployment_id:
+        if not isinstance(deployment_id, str) or not deployment_id:
             return False
 
         recovery_actions = self.client.select(
@@ -110,15 +111,14 @@ class DeploymentLookup:
 
         # Check if any recovery actions are pending or failed
         unresolved = [
-            action for action in recovery_actions
+            action
+            for action in recovery_actions
             if action.get("status") in ["pending", "failed", "approved", "running"]
         ]
 
         return len(unresolved) > 0
 
-    def can_start_new_deployment(
-        self, organization_id: str, intent: str
-    ) -> Dict[str, any]:
+    def can_start_new_deployment(self, organization_id: str, intent: str) -> dict[str, Any]:
         """
         Check if new deployment can start for organization.
 
@@ -145,6 +145,13 @@ class DeploymentLookup:
             }
 
         status = latest.get("status")
+        if not isinstance(status, str):
+            return {
+                "can_start": False,
+                "reason": "Existing deployment is missing status",
+                "existing_deployment": latest,
+                "requires_recovery": False,
+            }
 
         # Check if new deployment can start given current state
         can_start = DeploymentStateMachine.can_start_new_deployment(status, intent)
@@ -173,9 +180,7 @@ class DeploymentLookup:
             "requires_recovery": requires_recovery,
         }
 
-    def get_deployment_history(
-        self, organization_id: str, limit: int = 10
-    ) -> List[Dict[str, any]]:
+    def get_deployment_history(self, organization_id: str, limit: int = 10) -> list[dict[str, Any]]:
         """
         Get deployment history for organization.
 
@@ -196,9 +201,7 @@ class DeploymentLookup:
 
         return deployments
 
-    def get_partial_deployment_summary(
-        self, deployment_id: str
-    ) -> Dict[str, any]:
+    def get_partial_deployment_summary(self, deployment_id: str) -> dict[str, Any]:
         """
         Get summary of partial deployment progress.
 
@@ -266,9 +269,7 @@ class DeploymentLookup:
             "pending_actions": pending_actions,
         }
 
-    def get_external_resources(
-        self, organization_id: str
-    ) -> List[Dict[str, any]]:
+    def get_external_resources(self, organization_id: str) -> list[dict[str, Any]]:
         """
         Get all external resources for organization.
 
