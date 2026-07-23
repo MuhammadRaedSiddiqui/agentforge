@@ -1405,24 +1405,34 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             print("=" * 60)
 
             try:
+                import os
+
                 from dotenv import load_dotenv
 
-                from adapters.model_wrapper import initialize_model, reset_model
-
                 load_dotenv()
+                provider_name = os.getenv("MODEL_PROVIDER", "gemini").lower()
+
                 print("\n[1/3] Initializing model from environment...")
-                try:
-                    model = initialize_model()
-                except ValueError:
-                    reset_model()
-                    model = initialize_model()
+
+                if provider_name == "bedrock":
+                    from adapters.bedrock_wrapper import initialize_bedrock_model
+
+                    model = initialize_bedrock_model()
+                else:
+                    from adapters.model_wrapper import initialize_model, reset_model
+
+                    try:
+                        model = initialize_model()
+                    except ValueError:
+                        reset_model()
+                        model = initialize_model()
+
                 provider = model.get_provider()
                 model_id = model.get_model_id()
                 print(f"  ✓ Model initialized ({provider}/{model_id})")
 
                 print("\n[2/3] Testing simple completion...")
-                response = model.client.chat.completions.create(
-                    model=model.get_model_id(),
+                response = model.create_completion(
                     messages=[
                         {"role": "user", "content": "Say 'test successful' if you can read this."}
                     ],
@@ -1436,7 +1446,11 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
 
                 print("\n" + "=" * 60)
                 print(f"✓ Model smoke test passed ({provider}/{model_id})")
-                reset_model()
+
+                if provider_name != "bedrock":
+                    from adapters.model_wrapper import reset_model as _reset
+                    _reset()
+
                 return 0
 
             except Exception as e:
@@ -1506,6 +1520,85 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         import traceback
 
         traceback.print_exc()
+        return 1
+
+
+def cmd_chat(args: argparse.Namespace) -> int:
+    """
+    Start a conversational intake session.
+
+    Args:
+        args: Command arguments
+
+    Returns:
+        Exit code (0 for success)
+    """
+    try:
+        import os
+
+        from dotenv import load_dotenv
+
+        from cli.chat import run_chat_session
+
+        load_dotenv()
+
+        provider = os.getenv("MODEL_PROVIDER", "gemini").lower()
+
+        # Initialize model based on provider
+        if provider == "bedrock":
+            from adapters.bedrock_wrapper import initialize_bedrock_model
+
+            model = initialize_bedrock_model()
+        else:
+            from adapters.model_wrapper import initialize_model, reset_model
+
+            try:
+                model = initialize_model()
+            except ValueError:
+                reset_model()
+                model = initialize_model()
+
+        # Run conversational session
+        confirmed_plan = run_chat_session(model=model)
+
+        if confirmed_plan is None:
+            return 0
+
+        # Validated handoff to existing pipeline
+        print("\nValidating deployment plan...")
+
+        intake_result = validate_intake(confirmed_plan)
+        if not intake_result["valid"]:
+            print("Validation errors:", file=sys.stderr)
+            for error in intake_result["errors"]:
+                print(f"  - {error}", file=sys.stderr)
+            print("\nPlease restart and correct these details.")
+            return 1
+
+        normalized_intake = normalize_intake(confirmed_plan)
+
+        # Create planner and task graph
+        planner = Planner()
+        task_graph = planner.create_task_graph(normalized_intake)
+        plan = planner.create_dry_run_plan(task_graph, normalized_intake)
+
+        print("\nDeployment plan validated. Starting execution...")
+        print("You will see an approval prompt for each platform action.\n")
+
+        # Load configuration and execute
+        config = load_config()
+        internal_client = SupabaseInternalClient(config)
+
+        return _run_execute(
+            normalized_intake,
+            internal_client,
+            config,
+            environment="staging",
+            auto_approve=False,
+        )
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
@@ -1752,6 +1845,12 @@ def main() -> int:
         help="Automatically approve deletion without confirmation",
     )
 
+    # chat command (010-conversational-orchestrator)
+    chat_parser = subparsers.add_parser(
+        "chat",
+        help="Start a conversational session to deploy a new client",
+    )
+
     # smoke-test command (T159)
     smoke_test_parser = subparsers.add_parser(
         "smoke-test",
@@ -1772,8 +1871,15 @@ def main() -> int:
     # Parse arguments
     args = parser.parse_args()
 
+    # Default to chat when no subcommand is given
+    if args.command is None:
+        args.command = "chat"
+
     # Route to command handlers
-    if args.command == "config":
+    if args.command == "chat":
+        return cmd_chat(args)
+
+    elif args.command == "config":
         if args.config_command == "check":
             return cmd_config_check(args)
         else:
@@ -1832,7 +1938,7 @@ def main() -> int:
 
     else:
         parser.print_help()
-        return 1
+        return 0
 
 
 if __name__ == "__main__":

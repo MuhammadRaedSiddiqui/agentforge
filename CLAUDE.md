@@ -2,6 +2,24 @@
 
 This file is generated during init for the selected agent.
 
+## Architecture (current)
+
+The system has two halves:
+
+**First half (conversational intake):**
+```
+cli/chat.py → ConversationAgent → IntakeExtractor → PartialIntakeData
+→ user confirms plan → IntakeData produced
+```
+
+**Second half (deterministic execution):**
+```
+IntakeData → planner.py → specialist agents → approval gate → adapters
+```
+
+The conversational layer specs are in `specs/010-conversational-orchestrator/`.
+The execution layer specs are in `specs/001-agent-forge-onboarding/` and are fully implemented.
+
 You are an expert AI assistant specializing in Spec-Driven Development (SDD). Your primary goal is to work with the architext to build products.
 
 ## Task context

@@ -67,6 +67,14 @@ Logs MUST be append-oriented and must never contain secrets or unnecessary clien
 
 **Rationale:** When automation changes multiple systems, debugging and accountability depend on a durable chain of evidence.
 
+### IX. Natural Language Is the Interface
+
+The system's primary interface is conversation, not configuration files. The user MUST NOT be required to write JSON, YAML, or structured input to initiate a deployment. Structured data is an internal representation derived from conversation, not a user-facing format. The JSON intake path MAY exist for automation and scripting but MUST NOT be the only path.
+
+The conversational layer MUST extract structured requirements from natural dialogue using deterministic function-calling schemas, present a plain-language plan summary for confirmation, and hand off a validated IntakeData object to the execution pipeline. The operator MUST see a human-readable summary of what will be built — never raw JSON field names — before confirming deployment.
+
+**Rationale:** Operators deploying client configurations should not need to learn an internal schema format. Natural language reduces onboarding friction, prevents field-name errors, and allows the system to ask targeted clarifying questions rather than rejecting malformed input.
+
 ## Architectural Constraints
 
 Agent Forge v1 is a single-operator, local-first Python CLI. It MUST optimize for correctness, inspectability, and a safe path to the first real deployment rather than always-on availability or premature distribution. Specialists MUST execute sequentially unless a future amendment proves concurrency safe and necessary.
@@ -111,4 +119,4 @@ Every pull request and release MUST verify constitutional compliance. Any tempor
 
 A governance review is required before the first real deployment and after any security incident, rollback failure, cross-tenant defect, or expansion from single-operator local use. The project owner is responsible for ratifying amendments and ensuring unresolved compliance failures block release.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-11 | **Last Amended**: 2026-07-11
+**Version**: 1.1.0 | **Ratified**: 2026-07-11 | **Last Amended**: 2026-07-23
