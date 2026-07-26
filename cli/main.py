@@ -470,6 +470,18 @@ def _run_execute(
         # Create deployment record
         print("\n[5/6] Creating deployment record...")
 
+        # Ensure organization row exists (foreign key requirement)
+        existing_org = internal_client.select(
+            "organizations", filters={"organization_id": organization_id}
+        )
+        if not existing_org:
+            internal_client.insert("organizations", {
+                "organization_id": organization_id,
+                "display_name": intake.get("business_name", organization_id),
+                "status": "active",
+            })
+            print(f"  ✓ Organization record created: {organization_id}")
+
         # First, insert the intake record
         from shared.hashing import compute_intake_hash, hash_json
 
