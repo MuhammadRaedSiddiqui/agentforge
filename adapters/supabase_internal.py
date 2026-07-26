@@ -240,26 +240,51 @@ class SupabaseInternalClient:
         remote_id: str,
         status: str,
         response_data: dict[str, Any],
+        proposed_action_id: str | None = None,
     ) -> Row:
         """
         Insert a receipt record.
 
-        Args:
-            deployment_id: Deployment identifier
-            platform: Platform name
-            operation: Operation performed
-            remote_id: Remote resource ID
-            status: Operation status
-            response_data: Full response from adapter
-
-        Returns:
-            Inserted receipt record
+        If proposed_action_id is provided, writes to external_request_attempts
+        and external_receipts tables. Otherwise logs only (legacy path).
         """
         import logging
-        logging.getLogger(__name__).info(
-            f"Receipt: {platform}/{operation} -> {remote_id} ({status})"
-        )
-        return {"deployment_id": deployment_id, "platform": platform, "operation": operation, "remote_id": remote_id, "status": status}
+        from datetime import datetime, timezone
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"Receipt: {platform}/{operation} -> {remote_id} ({status})")
+
+        if not proposed_action_id:
+            return {"deployment_id": deployment_id, "platform": platform, "operation": operation, "remote_id": remote_id, "status": status}
+
+        now = datetime.now(timezone.utc).isoformat()
+        outcome = "success" if status == "success" else "failure"
+
+        try:
+            attempt = self.insert("external_request_attempts", {
+                "proposed_action_id": proposed_action_id,
+                "attempt_number": 1,
+                "request_hash": hash_json({"platform": platform, "operation": operation}),
+                "started_at": now,
+                "finished_at": now,
+                "outcome": outcome,
+                "failure_class": None if outcome == "success" else "permanent",
+            })
+
+            if outcome == "success" and attempt.get("attempt_id"):
+                self.insert("external_receipts", {
+                    "proposed_action_id": proposed_action_id,
+                    "attempt_id": attempt["attempt_id"],
+                    "platform": platform,
+                    "operation": operation,
+                    "remote_resource_id": remote_id,
+                    "receipt_hash": hash_json(response_data or {}),
+                })
+
+            return attempt
+        except Exception as e:
+            logger.warning(f"Failed to persist receipt to DB: {e}")
+            return {"deployment_id": deployment_id, "platform": platform, "operation": operation, "remote_id": remote_id, "status": status}
 
     def upsert_external_resource(
         self,
@@ -336,25 +361,47 @@ class SupabaseInternalClient:
         status: str,
         subject: str,
         detail: dict[str, Any],
+        session_id: str | None = None,
     ) -> Row:
         """
         Append an audit event.
 
-        Args:
-            deployment_id: Deployment identifier
-            event_type: Type of event
-            status: Event status
-            subject: Subject of the event
-            detail: Event details
-
-        Returns:
-            Inserted audit event record
+        If session_id is provided, writes to the audit_events table.
+        Otherwise logs only (legacy path).
         """
         import logging
-        logging.getLogger(__name__).info(
-            f"Audit: {event_type} {status} subject={subject}"
-        )
-        return {"deployment_id": deployment_id, "event_type": event_type, "status": status, "subject": str(subject)}
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"Audit: {event_type} {status} subject={subject}")
+
+        if not session_id:
+            return {"deployment_id": deployment_id, "event_type": event_type, "status": status, "subject": str(subject)}
+
+        event_hash = hash_json({
+            "deployment_id": deployment_id,
+            "event_type": event_type,
+            "status": status,
+            "subject": str(subject),
+            "detail": detail,
+        })
+
+        try:
+            return self.insert("audit_events", {
+                "deployment_id": deployment_id,
+                "session_id": session_id,
+                "event_type": event_type,
+                "actor_type": "orchestrator",
+                "actor_id": "system",
+                "subject_type": "deployment",
+                "subject_id": str(subject),
+                "status": status,
+                "summary": f"{event_type}: {status}",
+                "detail": detail if isinstance(detail, dict) else {"info": str(detail)},
+                "event_hash": event_hash,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to persist audit event to DB: {e}")
+            return {"deployment_id": deployment_id, "event_type": event_type, "status": status, "subject": str(subject)}
 
     def update_deployment_status(self, deployment_id: str, status: str) -> list[Row]:
         """

@@ -451,7 +451,15 @@ class Orchestrator:
             # Strip fields not accepted by Vapi's assistant create endpoint
             assistant_config.pop("tools", None)
             assistant_config.pop("metadata", None)
-            return adapter.create_assistant(assistant_config)
+            receipt = adapter.create_assistant(assistant_config)
+            # Auto-assign phone number if provided
+            phone_number_id = payload.get("phone_number_id")
+            if phone_number_id and receipt.remote_id:
+                try:
+                    adapter.assign_phone_number(phone_number_id, receipt.remote_id)
+                except Exception:
+                    pass
+            return receipt
         elif operation == "create_tool":
             return adapter.create_tool(payload)
         elif operation == "assign_phone_number":
@@ -476,11 +484,17 @@ class Orchestrator:
             if blueprint_path and Path(blueprint_path).exists():
                 with open(blueprint_path, "r", encoding="utf-8") as f:
                     blueprint = json.load(f)
-            return adapter.create_scenario(
+            receipt = adapter.create_scenario(
                 blueprint,
                 payload["scheduling"],
                 payload.get("confirmed", False),
             )
+            if receipt.remote_id:
+                try:
+                    adapter.activate_scenario(int(receipt.remote_id))
+                except Exception:
+                    pass
+            return receipt
         elif operation == "create_hook":
             return adapter.create_hook(
                 payload["name"],

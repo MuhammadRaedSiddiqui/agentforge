@@ -1589,6 +1589,27 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
         normalized_intake = normalize_intake(confirmed_plan)
 
+        # Validate voice ID against Vapi before proceeding
+        voice_id = normalized_intake.get("voice_id", "")
+        if voice_id:
+            try:
+                from adapters.vapi import VapiAdapter
+
+                vapi = VapiAdapter()
+                receipt = vapi.list_voices()
+                voices = receipt.response_data.get("voices", [])
+                available_ids = [
+                    v.get("voiceId") or v.get("id") or v.get("name", "")
+                    for v in voices
+                ]
+                if available_ids and voice_id not in available_ids:
+                    print(f"\nVoice '{voice_id}' not found in Vapi.", file=sys.stderr)
+                    print(f"Available voices: {', '.join(available_ids[:15])}", file=sys.stderr)
+                    print("\nPlease restart with a valid voice ID.")
+                    return 1
+            except Exception:
+                pass
+
         # Create planner and task graph
         planner = Planner()
         task_graph = planner.create_task_graph(normalized_intake)

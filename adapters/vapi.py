@@ -408,6 +408,46 @@ class VapiAdapter:
             can_retry=False,  # Update requires read-before-write
         )
 
+    def list_phone_numbers(self) -> AdapterReceipt:
+        """List all phone numbers in the Vapi account."""
+        url = f"{self.base_url}/phone-number"
+        response = self._request(
+            method="GET",
+            url=url,
+            headers=self._get_headers(),
+            operation="list_phone_numbers",
+        )
+        numbers = response if isinstance(response, list) else []
+        return AdapterReceipt(
+            platform="vapi",
+            operation="list_phone_numbers",
+            remote_id=None,
+            status="success",
+            response_data={"phone_numbers": numbers},
+            idempotency_key=None,
+            can_retry=True,
+        )
+
+    def list_voices(self) -> AdapterReceipt:
+        """List all available voices from Vapi."""
+        url = f"{self.base_url}/voice"
+        response = self._request(
+            method="GET",
+            url=url,
+            headers=self._get_headers(),
+            operation="list_voices",
+        )
+        voices = response if isinstance(response, list) else []
+        return AdapterReceipt(
+            platform="vapi",
+            operation="list_voices",
+            remote_id=None,
+            status="success",
+            response_data={"voices": voices},
+            idempotency_key=None,
+            can_retry=True,
+        )
+
     # Validation helpers
 
     def _validate_assistant_create_payload(self, payload: dict[str, Any]) -> None:
