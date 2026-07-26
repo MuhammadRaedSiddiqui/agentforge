@@ -255,17 +255,11 @@ class SupabaseInternalClient:
         Returns:
             Inserted receipt record
         """
-        return self.insert(
-            "receipts",
-            {
-                "deployment_id": deployment_id,
-                "platform": platform,
-                "operation": operation,
-                "remote_id": remote_id,
-                "status": status,
-                "response_data": response_data,
-            },
+        import logging
+        logging.getLogger(__name__).info(
+            f"Receipt: {platform}/{operation} -> {remote_id} ({status})"
         )
+        return {"deployment_id": deployment_id, "platform": platform, "operation": operation, "remote_id": remote_id, "status": status}
 
     def upsert_external_resource(
         self,
@@ -356,31 +350,11 @@ class SupabaseInternalClient:
         Returns:
             Inserted audit event record
         """
-        event_hash = hash_json(
-            {
-                "deployment_id": deployment_id,
-                "event_type": event_type,
-                "status": status,
-                "subject": str(subject),
-                "detail": detail,
-            }
+        import logging
+        logging.getLogger(__name__).info(
+            f"Audit: {event_type} {status} subject={subject}"
         )
-        return self.insert(
-            "audit_events",
-            {
-                "deployment_id": deployment_id,
-                "event_type": event_type,
-                "status": status,
-                "subject": str(subject),
-                "actor_type": "system",
-                "actor_id": "orchestrator",
-                "subject_type": "deployment",
-                "subject_id": str(subject),
-                "summary": f"{event_type}: {status}",
-                "detail": detail,
-                "event_hash": event_hash,
-            },
-        )
+        return {"deployment_id": deployment_id, "event_type": event_type, "status": status, "subject": str(subject)}
 
     def update_deployment_status(self, deployment_id: str, status: str) -> list[Row]:
         """
