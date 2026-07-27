@@ -6,6 +6,7 @@ ground-truth templates, with full provenance tracking.
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -90,7 +91,7 @@ class MakeAgent:
             "organization_display_name": organization_display_name,
             "make_team_id": make_team_id,
             f"{capability}_hook_id": f"{{HOOK_{capability.upper()}_ID}}",  # Runtime placeholder
-            "supabase_connection_id": "{{SUPABASE_CONNECTION_ID}}",  # Runtime placeholder
+            "supabase_connection_id": os.getenv("MAKE_SUPABASE_CONNECTION_ID", "{{SUPABASE_CONNECTION_ID}}"),
         }
 
         # Parameterize blueprint

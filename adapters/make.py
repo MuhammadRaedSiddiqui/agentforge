@@ -181,6 +181,18 @@ class MakeAdapter:
             if isinstance(hook, str) and (hook.startswith("{") or hook.startswith("{{")):
                 params.pop("hook", None)
 
+        # Strip properties that belong in the API payload, not inside the blueprint
+        blueprint.pop("teamId", None)
+        blueprint.pop("scheduling", None)
+        blueprint.pop("description", None)
+
+        # Sanitize metadata to only include fields Make accepts
+        blueprint["metadata"] = {
+            "instant": True,
+            "version": 1,
+            "designer": {"orphans": []},
+        }
+
         # Normalize scheduling type (on_demand -> indefinitely for Make API)
         valid_types = ["immediately", "indefinitely", "once", "daily", "weekly", "monthly", "yearly"]
         if scheduling.get("type") not in valid_types:

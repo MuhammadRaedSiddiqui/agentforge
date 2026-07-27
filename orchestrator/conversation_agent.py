@@ -1,3 +1,4 @@
+import os
 import uuid
 from pathlib import Path
 from typing import Any
@@ -208,9 +209,9 @@ class ConversationAgent:
             ],
             "enabled_capabilities": capabilities,
             "external_identifiers": {
-                "vapi_phone_number_id": "pending-setup",
-                "make_team_id": "pending-setup",
-                "supabase_project_ref": "pending-setup",
+                "vapi_phone_number_id": os.getenv("VAPI_PHONE_NUMBER_ID", "pending-setup"),
+                "make_team_id": os.getenv("MAKE_TEAM_ID", "pending-setup"),
+                "supabase_project_ref": os.getenv("SUPABASE_PROJECT_REF_STAGING", "pending-setup"),
             },
             **capability_defaults,
         }
