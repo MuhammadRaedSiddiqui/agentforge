@@ -132,11 +132,11 @@ class MakeAdapter:
             return result
 
         except requests.Timeout as e:
-            raise TransientError(f"Request timeout: {e}")
+            raise TransientError(f"Request timeout: {e}") from e
         except requests.ConnectionError as e:
-            raise TransientError(f"Connection error: {e}")
+            raise TransientError(f"Connection error: {e}") from e
         except requests.RequestException as e:
-            raise PermanentError(f"Request failed: {e}")
+            raise PermanentError(f"Request failed: {e}") from e
 
     def create_scenario(
         self, blueprint: dict[str, Any], scheduling: dict[str, Any], confirmed: bool = False
@@ -193,10 +193,9 @@ class MakeAdapter:
             "designer": {"orphans": []},
         }
 
-        # Normalize scheduling type (on_demand -> indefinitely for Make API)
         valid_types = ["immediately", "indefinitely", "once", "daily", "weekly", "monthly", "yearly"]
         if scheduling.get("type") not in valid_types:
-            scheduling = {"type": "indefinitely", "interval": 900}
+            scheduling = {"type": "immediately"}
 
         # Serialize blueprint and scheduling to JSON strings as Make expects
         payload = {
@@ -398,6 +397,56 @@ class MakeAdapter:
             response_data=response,
             idempotency_key=None,
             can_retry=True,
+        )
+
+    def update_scenario_blueprint(
+        self, scenario_id: int, blueprint: dict[str, Any], confirmed: bool = False
+    ) -> AdapterReceipt:
+        """
+        Update a scenario's blueprint via PUT.
+
+        Args:
+            scenario_id: Make scenario ID
+            blueprint: Full blueprint dict to apply
+            confirmed: Skip confirmation prompts
+
+        Returns:
+            AdapterReceipt with updated scenario data
+        """
+        if not scenario_id or scenario_id < 1:
+            raise ValidationError("scenario_id must be a positive integer", field="scenario_id")
+
+        blueprint.pop("teamId", None)
+        blueprint.pop("scheduling", None)
+        blueprint.pop("description", None)
+        blueprint["metadata"] = {
+            "instant": True,
+            "version": 1,
+            "designer": {"orphans": []},
+        }
+
+        url = f"{self.base_url}/scenarios/{scenario_id}/blueprint"
+        if confirmed:
+            url += "?confirmed=true"
+
+        payload = {"blueprint": json.dumps(blueprint)}
+
+        response = self._request(
+            method="PUT",
+            url=url,
+            headers=self._get_headers(),
+            json_data=payload,
+            operation="update_scenario_blueprint",
+        )
+
+        return AdapterReceipt(
+            platform="make",
+            operation="update_scenario_blueprint",
+            remote_id=str(scenario_id),
+            status="success",
+            response_data=response,
+            idempotency_key=None,
+            can_retry=False,
         )
 
     def activate_scenario(self, scenario_id: int) -> AdapterReceipt:

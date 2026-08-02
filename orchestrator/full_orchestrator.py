@@ -419,7 +419,7 @@ class FullOrchestrator:
                         "name": f"{organization_id}-{cap}",
                         "blueprint": {"capability": cap},
                         "blueprint_path": blueprint_path,
-                        "scheduling": {"type": "on_demand"},
+                        "scheduling": {"type": "immediately"},
                         "confirmed": False,
                     },
                     retry_policy="none",

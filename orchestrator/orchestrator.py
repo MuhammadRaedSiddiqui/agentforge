@@ -13,6 +13,7 @@ Coordinates the full deployment flow:
 from datetime import UTC, datetime
 from typing import Any
 
+from adapters.base import AdapterReceipt
 from adapters.supabase_internal import SupabaseInternalClient
 from cli.prompts import InteractivePrompts
 from orchestrator.approval import (
@@ -444,7 +445,7 @@ class Orchestrator:
         if operation == "create_assistant":
             config_path = payload.get("config_path")
             if config_path and Path(config_path).exists():
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     assistant_config = json.load(f)
             else:
                 assistant_config = payload
@@ -455,10 +456,9 @@ class Orchestrator:
             # Auto-assign phone number if provided
             phone_number_id = payload.get("phone_number_id")
             if phone_number_id and receipt.remote_id:
-                try:
+                import contextlib
+                with contextlib.suppress(Exception):
                     adapter.assign_phone_number(phone_number_id, receipt.remote_id)
-                except Exception:
-                    pass
             return receipt
         elif operation == "create_tool":
             return adapter.create_tool(payload)
@@ -473,16 +473,40 @@ class Orchestrator:
     def _execute_make_action(self, adapter: Any, proposed_action: ProposedAction) -> Any:
         """Execute Make action."""
         import json
+        import os
         from pathlib import Path
+
+        from orchestrator.make_deployer import MakeScenarioDeployer
 
         operation = proposed_action.operation
         payload = proposed_action.payload
 
         if operation == "create_scenario":
-            blueprint = payload["blueprint"]
             blueprint_path = payload.get("blueprint_path")
+            capability = payload.get("blueprint", {}).get("capability", "")
+
+            if blueprint_path and Path(blueprint_path).exists() and capability:
+                deployer = MakeScenarioDeployer(adapter)
+                connection_id = os.getenv("MAKE_SUPABASE_CONNECTION_ID")
+                result = deployer.deploy_scenario(
+                    capability=capability,
+                    blueprint_path=blueprint_path,
+                    hook_name=payload.get("name", f"hook-{capability}"),
+                    connection_id=connection_id,
+                )
+                return AdapterReceipt(
+                    platform="make",
+                    operation="create_scenario",
+                    remote_id=str(result["scenario_id"]),
+                    status="success",
+                    response_data=result,
+                    idempotency_key=None,
+                    can_retry=False,
+                )
+
+            blueprint = payload["blueprint"]
             if blueprint_path and Path(blueprint_path).exists():
-                with open(blueprint_path, "r", encoding="utf-8") as f:
+                with open(blueprint_path, encoding="utf-8") as f:
                     blueprint = json.load(f)
             receipt = adapter.create_scenario(
                 blueprint,
@@ -490,10 +514,9 @@ class Orchestrator:
                 payload.get("confirmed", False),
             )
             if receipt.remote_id:
-                try:
+                import contextlib
+                with contextlib.suppress(Exception):
                     adapter.activate_scenario(int(receipt.remote_id))
-                except Exception:
-                    pass
             return receipt
         elif operation == "create_hook":
             return adapter.create_hook(
