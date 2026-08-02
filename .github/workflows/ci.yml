@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install -r requirements.txt mypy types-requests types-pyyaml
       - name: Type check
         continue-on-error: true
         run: mypy --ignore-missing-imports --no-error-summary adapters/ orchestrator/ shared/ agents/ cli/
@@ -50,5 +50,5 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install -r requirements.txt pytest pytest-timeout pytest-mock
       - run: pytest -m "unit or contract" --timeout=30 --tb=short -q
