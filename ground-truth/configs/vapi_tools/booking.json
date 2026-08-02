@@ -1,0 +1,65 @@
+{
+  "type": "function",
+  "function": {
+    "name": "book_appointment",
+    "description": "Book a new appointment for {{organization_display_name}}. Creates a confirmed appointment slot for the specified date, time, and service type.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "The appointment date in YYYY-MM-DD format (e.g., 2024-03-15)",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "time": {
+          "type": "string",
+          "description": "The appointment time in HH:MM 24-hour format (e.g., 14:30)",
+          "pattern": "^\\d{2}:\\d{2}$"
+        },
+        "service_type": {
+          "type": "string",
+          "description": "The type of service being booked",
+          "enum": ["{{service_types}}"]
+        },
+        "client_name": {
+          "type": "string",
+          "description": "The client's full name",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "client_phone": {
+          "type": "string",
+          "description": "The client's phone number in E.164 format (e.g., +1234567890)",
+          "pattern": "^\\+[1-9]\\d{1,14}$"
+        },
+        "client_email": {
+          "type": "string",
+          "description": "The client's email address",
+          "format": "email"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes or special requests for the appointment",
+          "maxLength": 500
+        }
+      },
+      "required": ["date", "time", "service_type", "client_name", "client_phone"]
+    }
+  },
+  "async": false,
+  "server": {
+    "url": "{{server_url}}/webhook/{{organization_id}}/booking",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Organization-ID": "{{organization_id}}"
+    }
+  },
+  "metadata": {
+    "capability": "booking",
+    "organization_id": "{{organization_id}}",
+    "template_version": "1.0.0",
+    "requires_auth": true,
+    "creates_resource": true
+  }
+}

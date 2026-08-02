@@ -1,0 +1,361 @@
+{
+  "name": "{{organization_display_name}} - Appointment Rescheduling",
+  "description": "Process appointment rescheduling requests from Vapi assistant and update appointment dates/times in the client's Supabase database",
+  "teamId": "{{make_team_id}}",
+  "scheduling": {
+    "type": "immediately"
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "{{rescheduling_hook_id}}",
+        "dataStructure": {
+          "appointment_id": "string",
+          "phone": "string",
+          "new_date": "string",
+          "new_time": "string",
+          "reason": "string"
+        }
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {},
+        "expect": [
+          {
+            "name": "appointment_id",
+            "type": "text",
+            "label": "Appointment ID",
+            "required": true
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "label": "Phone",
+            "required": true
+          },
+          {
+            "name": "new_date",
+            "type": "text",
+            "label": "New Date",
+            "required": true
+          },
+          {
+            "name": "new_time",
+            "type": "text",
+            "label": "New Time",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "type": "text",
+            "label": "Reason",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "supabase:ActionSelectRows",
+      "version": 1,
+      "parameters": {
+        "connection": "{{supabase_connection_id}}",
+        "table": "appointments",
+        "select": "*",
+        "filter": [
+          {
+            "column": "organization_id",
+            "operator": "eq",
+            "value": "{{organization_id}}"
+          },
+          {
+            "column": "appointment_id",
+            "operator": "eq",
+            "value": "{{1.appointment_id}}"
+          },
+          {
+            "column": "client_phone",
+            "operator": "eq",
+            "value": "{{1.phone}}"
+          },
+          {
+            "column": "status",
+            "operator": "in",
+            "value": "('confirmed','rescheduled')"
+          }
+        ],
+        "limit": 1
+      },
+      "mapper": {
+        "appointment_id": "{{1.appointment_id}}",
+        "phone": "{{1.phone}}",
+        "organization_id": "{{organization_id}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "supabase:ActionSelectRows",
+      "version": 1,
+      "parameters": {
+        "connection": "{{supabase_connection_id}}",
+        "table": "availability_slots",
+        "select": "*",
+        "filter": [
+          {
+            "column": "organization_id",
+            "operator": "eq",
+            "value": "{{organization_id}}"
+          },
+          {
+            "column": "date",
+            "operator": "eq",
+            "value": "{{1.new_date}}"
+          },
+          {
+            "column": "time_slot",
+            "operator": "eq",
+            "value": "{{1.new_time}}"
+          },
+          {
+            "column": "is_available",
+            "operator": "eq",
+            "value": "true"
+          }
+        ],
+        "limit": 1
+      },
+      "mapper": {
+        "new_date": "{{1.new_date}}",
+        "new_time": "{{1.new_time}}",
+        "organization_id": "{{organization_id}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 5,
+              "module": "supabase:ActionUpdateRows",
+              "version": 1,
+              "parameters": {
+                "connection": "{{supabase_connection_id}}",
+                "table": "availability_slots",
+                "filter": [
+                  {
+                    "column": "organization_id",
+                    "operator": "eq",
+                    "value": "{{organization_id}}"
+                  },
+                  {
+                    "column": "appointment_id",
+                    "operator": "eq",
+                    "value": "{{1.appointment_id}}"
+                  }
+                ]
+              },
+              "mapper": {
+                "is_available": "true",
+                "appointment_id": null
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": -150
+                }
+              }
+            },
+            {
+              "id": 6,
+              "module": "supabase:ActionUpdateRows",
+              "version": 1,
+              "parameters": {
+                "connection": "{{supabase_connection_id}}",
+                "table": "appointments",
+                "filter": [
+                  {
+                    "column": "appointment_id",
+                    "operator": "eq",
+                    "value": "{{1.appointment_id}}"
+                  }
+                ]
+              },
+              "mapper": {
+                "date": "{{1.new_date}}",
+                "time": "{{1.new_time}}",
+                "status": "rescheduled",
+                "rescheduling_reason": "{{1.reason}}",
+                "rescheduled_at": "{{now}}",
+                "previous_date": "{{2.rows[0].date}}",
+                "previous_time": "{{2.rows[0].time}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": -150
+                }
+              }
+            },
+            {
+              "id": 7,
+              "module": "supabase:ActionUpdateRows",
+              "version": 1,
+              "parameters": {
+                "connection": "{{supabase_connection_id}}",
+                "table": "availability_slots",
+                "filter": [
+                  {
+                    "column": "organization_id",
+                    "operator": "eq",
+                    "value": "{{organization_id}}"
+                  },
+                  {
+                    "column": "date",
+                    "operator": "eq",
+                    "value": "{{1.new_date}}"
+                  },
+                  {
+                    "column": "time_slot",
+                    "operator": "eq",
+                    "value": "{{1.new_time}}"
+                  }
+                ]
+              },
+              "mapper": {
+                "is_available": "false",
+                "appointment_id": "{{1.appointment_id}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1800,
+                  "y": -150
+                }
+              }
+            },
+            {
+              "id": 8,
+              "module": "json:TransformToJSON",
+              "version": 1,
+              "parameters": {
+                "type": "object"
+              },
+              "mapper": {
+                "success": true,
+                "appointment_id": "{{1.appointment_id}}",
+                "new_date": "{{1.new_date}}",
+                "new_time": "{{1.new_time}}",
+                "previous_date": "{{2.rows[0].date}}",
+                "previous_time": "{{2.rows[0].time}}",
+                "message": "Appointment rescheduled successfully",
+                "organization_id": "{{organization_id}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 2100,
+                  "y": -150
+                }
+              }
+            }
+          ],
+          "condition": "{{length(2.rows) > 0 && length(3.rows) > 0}}"
+        },
+        {
+          "flow": [
+            {
+              "id": 9,
+              "module": "json:TransformToJSON",
+              "version": 1,
+              "parameters": {
+                "type": "object"
+              },
+              "mapper": {
+                "success": false,
+                "error": "{{if(length(2.rows) == 0, 'Appointment not found', 'New time slot not available')}}",
+                "appointment_id": "{{1.appointment_id}}",
+                "new_date": "{{1.new_date}}",
+                "new_time": "{{1.new_time}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 150
+                }
+              }
+            }
+          ],
+          "condition": "{{length(2.rows) == 0 || length(3.rows) == 0}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useQuerystring": false,
+        "parseResponse": true,
+        "timeout": 300,
+        "serializeUrl": false
+      },
+      "mapper": {
+        "url": "{{1.__IMTHOOK__.url}}",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "body": "{{ifempty(8.json, 9.json)}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2400,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": "{{organization_id}}_rescheduling",
+    "organization_id": "{{organization_id}}",
+    "capability": "rescheduling",
+    "template_version": "1.0.0",
+    "designer": {
+      "orphans": []
+    }
+  }
+}

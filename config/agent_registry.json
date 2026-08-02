@@ -1,0 +1,109 @@
+{
+  "agents": {
+    "information_agent": {
+      "name": "information_agent",
+      "display_name": "Information Agent",
+      "description": "Searches verified operational knowledge and provides fallback web research for troubleshooting",
+      "domain": "diagnosis",
+      "capabilities": [
+        "search_knowledge",
+        "search_web_fallback",
+        "propose_new_knowledge"
+      ],
+      "tools": [
+        "search_verified_knowledge",
+        "search_web",
+        "propose_gotcha"
+      ],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.1,
+      "max_tokens": 4096,
+      "system_prompt_template": "information_agent_system.txt"
+    },
+    "vapi_agent": {
+      "name": "vapi_agent",
+      "display_name": "Vapi Agent",
+      "description": "Generates Vapi assistant configurations and tool schemas from intake and templates",
+      "domain": "vapi",
+      "capabilities": [
+        "generate_assistant_config",
+        "generate_tool_schemas",
+        "validate_vapi_artifacts"
+      ],
+      "tools": [
+        "template_interpolation",
+        "field_provenance_marking",
+        "config_assembly"
+      ],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.0,
+      "max_tokens": 8192,
+      "system_prompt_template": "vapi_agent_system.txt"
+    },
+    "make_agent": {
+      "name": "make_agent",
+      "display_name": "Make Agent",
+      "description": "Generates Make.com scenario blueprints from templates and intake parameters",
+      "domain": "make",
+      "capabilities": [
+        "generate_scenario_blueprints",
+        "parameterize_webhooks",
+        "validate_make_artifacts"
+      ],
+      "tools": [
+        "blueprint_parameterization",
+        "hook_url_injection",
+        "scheduling_config"
+      ],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.0,
+      "max_tokens": 8192,
+      "system_prompt_template": "make_agent_system.txt"
+    },
+    "supabase_agent": {
+      "name": "supabase_agent",
+      "display_name": "Supabase Agent",
+      "description": "Generates SQL migrations and RLS policies for client database setup",
+      "domain": "supabase",
+      "capabilities": [
+        "generate_sql_migration",
+        "generate_rls_policies",
+        "validate_sql_artifacts"
+      ],
+      "tools": [
+        "sql_generation",
+        "policy_template",
+        "isolation_check"
+      ],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.0,
+      "max_tokens": 8192,
+      "system_prompt_template": "supabase_agent_system.txt"
+    },
+    "nodejs_agent": {
+      "name": "nodejs_agent",
+      "display_name": "Node.js Agent",
+      "description": "Generates unified diffs for Node.js backend route additions with HMAC validation",
+      "domain": "nodejs",
+      "capabilities": [
+        "read_server_source",
+        "generate_unified_diff",
+        "validate_nodejs_artifacts"
+      ],
+      "tools": [
+        "diff_generation",
+        "route_extraction",
+        "hmac_verification"
+      ],
+      "model": "gemini-2.5-pro",
+      "temperature": 0.0,
+      "max_tokens": 8192,
+      "system_prompt_template": "nodejs_agent_system.txt"
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "created": "2026-07-13",
+    "description": "Agent registry defining five specialist agents for Agent Forge deployment automation"
+  }
+}

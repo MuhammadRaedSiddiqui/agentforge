@@ -1,0 +1,97 @@
+{
+  "capabilities": {
+    "availability": {
+      "name": "availability",
+      "display_name": "Availability Check",
+      "description": "Check available appointment slots for the business",
+      "required_inputs": [
+        "business_hours",
+        "timezone",
+        "booking_calendar_id"
+      ],
+      "required_artifacts": [
+        "vapi_tool_schema",
+        "make_scenario_blueprint",
+        "backend_routes"
+      ],
+      "domains": ["vapi", "make", "nodejs"],
+      "approval_required": true,
+      "compensation_strategy": "delete_resources"
+    },
+    "booking": {
+      "name": "booking",
+      "display_name": "Appointment Booking",
+      "description": "Book new appointments for clients",
+      "required_inputs": [
+        "business_hours",
+        "timezone",
+        "services_offered",
+        "booking_calendar_id"
+      ],
+      "required_artifacts": [
+        "vapi_tool_schema",
+        "make_scenario_blueprint",
+        "backend_routes",
+        "database_schema"
+      ],
+      "domains": ["vapi", "make", "nodejs", "supabase"],
+      "approval_required": true,
+      "compensation_strategy": "delete_resources"
+    },
+    "cancellation": {
+      "name": "cancellation",
+      "display_name": "Appointment Cancellation",
+      "description": "Cancel existing appointments with policy enforcement",
+      "required_inputs": [
+        "cancellation_window_hours",
+        "booking_calendar_id"
+      ],
+      "required_artifacts": [
+        "vapi_tool_schema",
+        "make_scenario_blueprint",
+        "backend_routes"
+      ],
+      "domains": ["vapi", "make", "nodejs"],
+      "approval_required": true,
+      "compensation_strategy": "delete_resources"
+    },
+    "rescheduling": {
+      "name": "rescheduling",
+      "display_name": "Appointment Rescheduling",
+      "description": "Reschedule appointments with minimum notice enforcement",
+      "required_inputs": [
+        "rescheduling_policy",
+        "business_hours",
+        "booking_calendar_id"
+      ],
+      "required_artifacts": [
+        "vapi_tool_schema",
+        "make_scenario_blueprint",
+        "backend_routes"
+      ],
+      "domains": ["vapi", "make", "nodejs"],
+      "approval_required": true,
+      "compensation_strategy": "delete_resources"
+    },
+    "human_transfer": {
+      "name": "human_transfer",
+      "display_name": "Human Transfer",
+      "description": "Transfer calls to a human operator when needed",
+      "required_inputs": [
+        "transfer_destination",
+        "phone_number"
+      ],
+      "required_artifacts": [
+        "vapi_assistant_config"
+      ],
+      "domains": ["vapi"],
+      "approval_required": true,
+      "compensation_strategy": "update_config"
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "created": "2026-07-13",
+    "description": "Capability map defining required inputs, artifacts, and domains for each automation capability"
+  }
+}

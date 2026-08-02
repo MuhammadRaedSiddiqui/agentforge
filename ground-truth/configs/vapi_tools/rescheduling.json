@@ -1,0 +1,55 @@
+{
+  "type": "function",
+  "function": {
+    "name": "reschedule_appointment",
+    "description": "Reschedule an existing appointment for {{organization_display_name}} to a new date and time. Requires the appointment ID, verification phone number, and new appointment details.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "appointment_id": {
+          "type": "string",
+          "description": "The unique identifier for the appointment to reschedule",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "phone": {
+          "type": "string",
+          "description": "The phone number used when booking (for verification)",
+          "pattern": "^\\+[1-9]\\d{1,14}$"
+        },
+        "new_date": {
+          "type": "string",
+          "description": "The new appointment date in YYYY-MM-DD format (e.g., 2024-03-15)",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "new_time": {
+          "type": "string",
+          "description": "The new appointment time in HH:MM 24-hour format (e.g., 14:30)",
+          "pattern": "^\\d{2}:\\d{2}$"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional reason for rescheduling",
+          "maxLength": 200
+        }
+      },
+      "required": ["appointment_id", "phone", "new_date", "new_time"]
+    }
+  },
+  "async": false,
+  "server": {
+    "url": "{{server_url}}/webhook/{{organization_id}}/rescheduling",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Organization-ID": "{{organization_id}}"
+    }
+  },
+  "metadata": {
+    "capability": "rescheduling",
+    "organization_id": "{{organization_id}}",
+    "template_version": "1.0.0",
+    "requires_auth": true,
+    "updates_resource": true
+  }
+}

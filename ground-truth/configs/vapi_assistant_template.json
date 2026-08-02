@@ -1,0 +1,175 @@
+{
+  "name": "{{organization_display_name}} Assistant",
+  "model": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "maxTokens": 500
+  },
+  "voice": {
+    "provider": "11labs",
+    "voiceId": "{{voice_id}}",
+    "stability": 0.5,
+    "similarityBoost": 0.75
+  },
+  "firstMessage": "Hello! I'm the {{organization_display_name}} assistant. How can I help you today?",
+  "serverUrl": "{{server_url}}",
+  "serverUrlSecret": "{{server_url_secret}}",
+  "endCallMessage": "Thank you for calling {{organization_display_name}}. Have a great day!",
+  "endCallPhrases": ["goodbye", "bye", "end call"],
+  "recordingEnabled": true,
+  "hipaaEnabled": false,
+  "silenceTimeoutSeconds": 30,
+  "maxDurationSeconds": 600,
+  "backgroundSound": "office",
+  "backchannelingEnabled": true,
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-2",
+    "language": "en"
+  },
+  "clientMessages": [
+    "transcript",
+    "function-call",
+    "hang",
+    "speech-update"
+  ],
+  "serverMessages": [
+    "end-of-call-report",
+    "status-update",
+    "hang",
+    "function-call"
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "check_availability",
+        "description": "Check available appointment slots for the client",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "description": "Date to check availability (YYYY-MM-DD format)"
+            },
+            "service_type": {
+              "type": "string",
+              "description": "Type of service requested"
+            }
+          },
+          "required": ["date"]
+        }
+      },
+      "async": false,
+      "server": {
+        "url": "{{server_url}}/tools/availability"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "book_appointment",
+        "description": "Book an appointment for the client",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "description": "Appointment date (YYYY-MM-DD format)"
+            },
+            "time": {
+              "type": "string",
+              "description": "Appointment time (HH:MM format)"
+            },
+            "service_type": {
+              "type": "string",
+              "description": "Type of service"
+            },
+            "client_name": {
+              "type": "string",
+              "description": "Client's full name"
+            },
+            "client_phone": {
+              "type": "string",
+              "description": "Client's phone number"
+            },
+            "client_email": {
+              "type": "string",
+              "description": "Client's email address"
+            }
+          },
+          "required": ["date", "time", "service_type", "client_name", "client_phone"]
+        }
+      },
+      "async": false,
+      "server": {
+        "url": "{{server_url}}/tools/booking"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "cancel_appointment",
+        "description": "Cancel an existing appointment",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "appointment_id": {
+              "type": "string",
+              "description": "Unique identifier for the appointment"
+            },
+            "phone": {
+              "type": "string",
+              "description": "Phone number used for booking"
+            }
+          },
+          "required": ["appointment_id", "phone"]
+        }
+      },
+      "async": false,
+      "server": {
+        "url": "{{server_url}}/tools/cancellation"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "reschedule_appointment",
+        "description": "Reschedule an existing appointment to a new time",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "appointment_id": {
+              "type": "string",
+              "description": "Unique identifier for the appointment"
+            },
+            "phone": {
+              "type": "string",
+              "description": "Phone number used for booking"
+            },
+            "new_date": {
+              "type": "string",
+              "description": "New appointment date (YYYY-MM-DD format)"
+            },
+            "new_time": {
+              "type": "string",
+              "description": "New appointment time (HH:MM format)"
+            }
+          },
+          "required": ["appointment_id", "phone", "new_date", "new_time"]
+        }
+      },
+      "async": false,
+      "server": {
+        "url": "{{server_url}}/tools/rescheduling"
+      }
+    }
+  ],
+  "metadata": {
+    "organization_id": "{{organization_id}}",
+    "template_version": "1.0.0",
+    "created_by": "agent-forge",
+    "capabilities": ["availability", "booking", "cancellation", "rescheduling"]
+  }
+}

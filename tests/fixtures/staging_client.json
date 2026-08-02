@@ -1,0 +1,69 @@
+{
+  "organization_id": "agent_forge_staging",
+  "business_name": "Agent Forge Staging Salon",
+  "phone_number": "+15555550199",
+  "voice_id": "burt",
+  "timezone": "America/New_York",
+  "business_hours": {
+    "monday": [
+      {"open": "09:00", "close": "17:00"}
+    ],
+    "tuesday": [
+      {"open": "09:00", "close": "17:00"}
+    ],
+    "wednesday": [
+      {"open": "09:00", "close": "17:00"}
+    ],
+    "thursday": [
+      {"open": "09:00", "close": "17:00"}
+    ],
+    "friday": [
+      {"open": "09:00", "close": "17:00"}
+    ],
+    "saturday": [
+      {"open": "10:00", "close": "14:00"}
+    ],
+    "sunday": []
+  },
+  "services_offered": [
+    {
+      "name": "Consultation",
+      "duration_minutes": 30,
+      "description": "Initial consultation for new clients"
+    },
+    {
+      "name": "Haircut",
+      "duration_minutes": 45,
+      "description": "Standard haircut service"
+    },
+    {
+      "name": "Styling",
+      "duration_minutes": 60,
+      "description": "Hair styling service"
+    }
+  ],
+  "booking_calendar_id": "staging-calendar-agent-forge-001",
+  "cancellation_window_hours": 24,
+  "rescheduling_policy": {
+    "minimum_notice_hours": 12,
+    "maximum_reschedules": 2,
+    "allowed": true
+  },
+  "transfer_destination": "+15555550198",
+  "enabled_capabilities": [
+    "availability",
+    "booking",
+    "cancellation",
+    "rescheduling",
+    "human_transfer"
+  ],
+  "external_identifiers": {
+    "vapi_phone_number_id": "staging-phone-vapi-12345",
+    "make_team_id": "staging-team-make-67890",
+    "supabase_project_ref": "staging-supabase-ref"
+  },
+  "hosting": {
+    "webhook_base_url": "https://averon-ztfm.onrender.com"
+  },
+  "server_source_path": "server.js"
+}

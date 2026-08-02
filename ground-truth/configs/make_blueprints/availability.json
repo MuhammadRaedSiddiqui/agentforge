@@ -1,0 +1,162 @@
+{
+  "name": "{{organization_display_name}} - Availability Check",
+  "description": "Process availability check requests from Vapi assistant and query the client's Supabase database for available time slots",
+  "teamId": "{{make_team_id}}",
+  "scheduling": {
+    "type": "immediately"
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "{{availability_hook_id}}",
+        "dataStructure": {
+          "date": "string",
+          "service_type": "string",
+          "duration_minutes": "integer"
+        }
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {},
+        "expect": [
+          {
+            "name": "date",
+            "type": "text",
+            "label": "Date",
+            "required": true
+          },
+          {
+            "name": "service_type",
+            "type": "text",
+            "label": "Service Type",
+            "required": false
+          },
+          {
+            "name": "duration_minutes",
+            "type": "number",
+            "label": "Duration Minutes",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "supabase:ActionSelectRows",
+      "version": 1,
+      "parameters": {
+        "connection": "{{supabase_connection_id}}",
+        "table": "availability_slots",
+        "select": "*",
+        "filter": [
+          {
+            "column": "organization_id",
+            "operator": "eq",
+            "value": "{{organization_id}}"
+          },
+          {
+            "column": "date",
+            "operator": "eq",
+            "value": "{{1.date}}"
+          },
+          {
+            "column": "is_available",
+            "operator": "eq",
+            "value": "true"
+          }
+        ],
+        "order": [
+          {
+            "column": "time_slot",
+            "ascending": true
+          }
+        ]
+      },
+      "mapper": {
+        "date": "{{1.date}}",
+        "organization_id": "{{organization_id}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "json:TransformToJSON",
+      "version": 1,
+      "parameters": {
+        "type": "object"
+      },
+      "mapper": {
+        "available_slots": "{{2.rows}}",
+        "date": "{{1.date}}",
+        "organization_id": "{{organization_id}}",
+        "total_slots": "{{length(2.rows)}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useQuerystring": false,
+        "parseResponse": true,
+        "authUser": "",
+        "authPass": "",
+        "timeout": 300,
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "followAllRedirects": false,
+        "serializeUrl": false
+      },
+      "mapper": {
+        "url": "{{1.__IMTHOOK__.url}}",
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "body": "{{3.json}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": "{{organization_id}}_availability",
+    "organization_id": "{{organization_id}}",
+    "capability": "availability",
+    "template_version": "1.0.0",
+    "designer": {
+      "orphans": []
+    }
+  }
+}

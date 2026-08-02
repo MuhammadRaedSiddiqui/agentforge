@@ -1,0 +1,1854 @@
+openapi: 3.1.0
+info:
+  title: Agent Forge External Tool Contracts
+  version: 1.0.0
+  description: |
+    Canonical transport contracts for feature 001-agent-forge-onboarding.
+    Reviewed against official vendor documentation on 2026-07-11.
+
+    This file intentionally narrows large vendor schemas to fields Agent Forge
+    sends, validates, persists, or uses for reconciliation. Vendor responses may
+    contain additional fields. Secrets are represented only as security schemes
+    and MUST never be placed in payloads, logs, artifacts, or examples.
+
+    Internal adapter operation names are stable Agent Forge names. They are not
+    claims about vendor SDK method names. Every live adapter MUST validate its
+    request and response against these contracts and preserve the vendor request
+    identifier when one is available.
+  x-artifact-version: 1.0.0
+  x-constitution-version: 1.0.0
+  x-spec-version: 1.0.0
+  x-plan-version: 1.0.0
+  x-reviewed-at: 2026-07-11
+  x-review-policy:
+    production_gate: contract tests and one staging smoke test per write operation
+    upgrade_rule: vendor path or schema changes require contract review and version bump
+    response_policy: reject missing required fields; tolerate documented extra fields
+    secret_policy: credentials may be loaded only by deterministic adapters
+
+servers:
+  - url: https://api.vapi.ai
+    description: Vapi production API
+  - url: https://{makeZone}.make.com/api/v2
+    description: Make regional API
+    variables:
+      makeZone:
+        default: us1
+        enum: [eu1, eu2, us1, us2]
+  - url: https://api.render.com/v1
+    description: Render public API
+  - url: https://{projectRef}.supabase.co
+    description: Supabase project Data API
+    variables:
+      projectRef:
+        default: replace-at-runtime
+  - url: https://api.search.brave.com
+    description: Brave Search API
+
+security: []
+
+tags:
+  - name: Vapi Assistants
+  - name: Vapi Tools
+  - name: Vapi Phone Numbers
+  - name: Make Scenarios
+  - name: Make Blueprints
+  - name: Make Hooks
+  - name: Render Services
+  - name: Render Deploys
+  - name: Supabase Data
+  - name: Brave Search
+
+paths:
+  /assistant:
+    post:
+      tags: [Vapi Assistants]
+      operationId: vapiCreateAssistant
+      summary: Create a Vapi assistant
+      x-agent-forge-operation: create_assistant
+      x-side-effect: create
+      x-reconciliation: list or retrieve assistant using the persisted returned id
+      x-compensation: vapiDeleteAssistant
+      x-source: https://docs.vapi.ai/api-reference/assistants/create
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VapiAssistantCreateRequest'
+      responses:
+        '201':
+          description: Assistant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiAssistant'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /assistant/{assistantId}:
+    parameters:
+      - $ref: '#/components/parameters/AssistantId'
+    get:
+      tags: [Vapi Assistants]
+      operationId: vapiGetAssistant
+      summary: Retrieve a Vapi assistant
+      x-agent-forge-operation: get_assistant
+      x-side-effect: none
+      x-source: https://docs.vapi.ai/api-reference/assistants/get
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      responses:
+        '200':
+          description: Assistant found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiAssistant'
+        default:
+          $ref: '#/components/responses/VendorError'
+    patch:
+      tags: [Vapi Assistants]
+      operationId: vapiUpdateAssistant
+      summary: Update a Vapi assistant
+      x-agent-forge-operation: update_assistant
+      x-side-effect: update
+      x-reconciliation: retrieve assistant and compare sanitized state hash
+      x-compensation: restore prior assistant payload captured by read-before-write
+      x-source: https://docs.vapi.ai/api-reference/assistants/update
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VapiAssistantUpdateRequest'
+      responses:
+        '200':
+          description: Assistant updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiAssistant'
+        default:
+          $ref: '#/components/responses/VendorError'
+    delete:
+      tags: [Vapi Assistants]
+      operationId: vapiDeleteAssistant
+      summary: Delete a Vapi assistant
+      x-agent-forge-operation: delete_assistant
+      x-side-effect: delete
+      x-destructive: true
+      x-reconciliation: retrieve must return not found
+      x-source: https://docs.vapi.ai/api-reference/assistants/delete
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      responses:
+        '200':
+          description: Assistant deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiAssistant'
+        '204':
+          description: Assistant deleted without a response body
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /tool:
+    get:
+      tags: [Vapi Tools]
+      operationId: vapiListTools
+      summary: List Vapi tools
+      x-agent-forge-operation: list_tools
+      x-side-effect: none
+      x-source: https://docs.vapi.ai/api-reference/tools/list
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        '200':
+          description: Tools returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VapiTool'
+        default:
+          $ref: '#/components/responses/VendorError'
+    post:
+      tags: [Vapi Tools]
+      operationId: vapiCreateTool
+      summary: Create a Vapi tool
+      x-agent-forge-operation: create_tool
+      x-side-effect: create
+      x-reconciliation: list tools and match deterministic name plus server URL
+      x-compensation: vapiDeleteTool
+      x-source: https://docs.vapi.ai/api-reference/tools/create
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VapiToolCreateRequest'
+      responses:
+        '201':
+          description: Tool created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiTool'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /tool/{toolId}:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+    get:
+      tags: [Vapi Tools]
+      operationId: vapiGetTool
+      summary: Retrieve a Vapi tool
+      x-agent-forge-operation: get_tool
+      x-side-effect: none
+      x-source: https://docs.vapi.ai/api-reference/tools/get
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      responses:
+        '200':
+          description: Tool found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiTool'
+        default:
+          $ref: '#/components/responses/VendorError'
+    patch:
+      tags: [Vapi Tools]
+      operationId: vapiUpdateTool
+      summary: Update a Vapi tool
+      x-agent-forge-operation: update_tool
+      x-side-effect: update
+      x-reconciliation: retrieve tool and compare sanitized state hash
+      x-compensation: restore prior tool payload captured by read-before-write
+      x-source: https://docs.vapi.ai/api-reference/tools/update
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VapiToolUpdateRequest'
+      responses:
+        '200':
+          description: Tool updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiTool'
+        default:
+          $ref: '#/components/responses/VendorError'
+    delete:
+      tags: [Vapi Tools]
+      operationId: vapiDeleteTool
+      summary: Delete a Vapi tool
+      x-agent-forge-operation: delete_tool
+      x-side-effect: delete
+      x-destructive: true
+      x-reconciliation: retrieve must return not found
+      x-source: https://docs.vapi.ai/api-reference/tools/delete
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      responses:
+        '200':
+          description: Tool deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiTool'
+        '204':
+          description: Tool deleted without a response body
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /phone-number/{phoneNumberId}:
+    parameters:
+      - $ref: '#/components/parameters/PhoneNumberId'
+    get:
+      tags: [Vapi Phone Numbers]
+      operationId: vapiGetPhoneNumber
+      summary: Retrieve a Vapi phone number
+      x-agent-forge-operation: get_phone_number
+      x-side-effect: none
+      x-source: https://docs.vapi.ai/api-reference/phone-numbers/get
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      responses:
+        '200':
+          description: Phone number found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiPhoneNumber'
+        default:
+          $ref: '#/components/responses/VendorError'
+    patch:
+      tags: [Vapi Phone Numbers]
+      operationId: vapiAssignPhoneNumber
+      summary: Assign or update the assistant associated with a phone number
+      x-agent-forge-operation: assign_phone_number
+      x-side-effect: update
+      x-reconciliation: retrieve phone number and verify assistantId
+      x-compensation: restore previous assistantId captured by read-before-write
+      x-source: https://docs.vapi.ai/api-reference/phone-numbers/update
+      servers:
+        - url: https://api.vapi.ai
+      security:
+        - VapiBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VapiPhoneNumberUpdateRequest'
+      responses:
+        '200':
+          description: Phone number updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapiPhoneNumber'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /scenarios:
+    get:
+      tags: [Make Scenarios]
+      operationId: makeListScenarios
+      summary: List Make scenarios for a team
+      x-agent-forge-operation: list_scenarios
+      x-side-effect: none
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      parameters:
+        - name: teamId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Scenarios returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scenarios]
+                properties:
+                  scenarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MakeScenario'
+        default:
+          $ref: '#/components/responses/VendorError'
+    post:
+      tags: [Make Scenarios]
+      operationId: makeCreateScenario
+      summary: Create a Make scenario from a serialized blueprint
+      x-agent-forge-operation: create_scenario
+      x-side-effect: create
+      x-reconciliation: list scenarios for team and match deterministic blueprint name
+      x-compensation: makeDeleteScenario
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      parameters:
+        - name: confirmed
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MakeScenarioCreateRequest'
+      responses:
+        '200':
+          description: Scenario created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scenario]
+                properties:
+                  scenario:
+                    $ref: '#/components/schemas/MakeScenario'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /scenarios/{scenarioId}:
+    parameters:
+      - $ref: '#/components/parameters/ScenarioId'
+    get:
+      tags: [Make Scenarios]
+      operationId: makeGetScenario
+      summary: Retrieve Make scenario details
+      x-agent-forge-operation: get_scenario
+      x-side-effect: none
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      responses:
+        '200':
+          description: Scenario details returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scenario]
+                properties:
+                  scenario:
+                    $ref: '#/components/schemas/MakeScenario'
+        default:
+          $ref: '#/components/responses/VendorError'
+    delete:
+      tags: [Make Scenarios]
+      operationId: makeDeleteScenario
+      summary: Delete a Make scenario
+      x-agent-forge-operation: delete_scenario
+      x-side-effect: delete
+      x-destructive: true
+      x-reconciliation: retrieve scenario must indicate deletion or not found
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      responses:
+        '200':
+          description: Scenario deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenario:
+                    type: integer
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /scenarios/{scenarioId}/blueprint:
+    parameters:
+      - $ref: '#/components/parameters/ScenarioId'
+    get:
+      tags: [Make Blueprints]
+      operationId: makeGetScenarioBlueprint
+      summary: Retrieve a scenario blueprint
+      x-agent-forge-operation: get_scenario_blueprint
+      x-side-effect: none
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios/blueprints
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      parameters:
+        - name: draft
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Blueprint returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MakeBlueprintResponse'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /scenarios/{scenarioId}/start:
+    parameters:
+      - $ref: '#/components/parameters/ScenarioId'
+    post:
+      tags: [Make Scenarios]
+      operationId: makeStartScenario
+      summary: Activate a Make scenario
+      x-agent-forge-operation: activate_scenario
+      x-side-effect: update
+      x-reconciliation: get scenario and require isActive true
+      x-compensation: makeStopScenario
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      responses:
+        '200':
+          description: Scenario activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MakeActionResponse'
+        '204':
+          description: Scenario activated without response body
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /scenarios/{scenarioId}/stop:
+    parameters:
+      - $ref: '#/components/parameters/ScenarioId'
+    post:
+      tags: [Make Scenarios]
+      operationId: makeStopScenario
+      summary: Deactivate a Make scenario
+      x-agent-forge-operation: deactivate_scenario
+      x-side-effect: update
+      x-reconciliation: get scenario and require isActive false
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      responses:
+        '200':
+          description: Scenario deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MakeActionResponse'
+        '204':
+          description: Scenario deactivated without response body
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /hooks:
+    get:
+      tags: [Make Hooks]
+      operationId: makeListHooks
+      summary: List Make hooks for a team
+      x-agent-forge-operation: list_hooks
+      x-side-effect: none
+      x-source: https://developers.make.com/api-documentation/api-reference/hooks
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      parameters:
+        - name: teamId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: typeName
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Hooks returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hooks]
+                properties:
+                  hooks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MakeHook'
+        default:
+          $ref: '#/components/responses/VendorError'
+    post:
+      tags: [Make Hooks]
+      operationId: makeCreateHook
+      summary: Create a Make hook
+      x-agent-forge-operation: create_hook
+      x-side-effect: create
+      x-reconciliation: list hooks for team and match deterministic hook name
+      x-compensation: makeDeleteHook
+      x-source: https://developers.make.com/api-documentation/api-reference/hooks
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MakeHookCreateRequest'
+      responses:
+        '200':
+          description: Hook created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hook]
+                properties:
+                  hook:
+                    $ref: '#/components/schemas/MakeHook'
+                  formula:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /hooks/{hookId}:
+    parameters:
+      - $ref: '#/components/parameters/HookId'
+    get:
+      tags: [Make Hooks]
+      operationId: makeGetHook
+      summary: Retrieve a Make hook
+      x-agent-forge-operation: get_hook
+      x-side-effect: none
+      x-source: https://developers.make.com/api-documentation/api-reference/hooks
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      responses:
+        '200':
+          description: Hook returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hook]
+                properties:
+                  hook:
+                    $ref: '#/components/schemas/MakeHook'
+        default:
+          $ref: '#/components/responses/VendorError'
+    delete:
+      tags: [Make Hooks]
+      operationId: makeDeleteHook
+      summary: Delete a Make hook
+      x-agent-forge-operation: delete_hook
+      x-side-effect: delete
+      x-destructive: true
+      x-reconciliation: get hook must return not found
+      x-source: https://developers.make.com/api-documentation/api-reference/hooks
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      parameters:
+        - name: confirmed
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Hook deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hook:
+                    type: integer
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /hooks/{hookId}/ping:
+    parameters:
+      - $ref: '#/components/parameters/HookId'
+    get:
+      tags: [Make Hooks]
+      operationId: makePingHook
+      summary: Verify that a Make hook is active and attached
+      x-agent-forge-operation: verify_hook
+      x-side-effect: none
+      x-source: https://developers.make.com/api-documentation/api-reference/hooks
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      responses:
+        '200':
+          description: Hook status returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MakeHookPing'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /services/{serviceId}/env-vars/{envVarKey}:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+      - $ref: '#/components/parameters/EnvVarKey'
+    get:
+      tags: [Render Services]
+      operationId: renderGetEnvironmentVariable
+      summary: Retrieve a Render service environment variable
+      x-agent-forge-operation: get_env_variable
+      x-side-effect: none
+      x-source: https://api-docs.render.com/reference/retrieve-env-var
+      servers:
+        - url: https://api.render.com/v1
+      security:
+        - RenderBearer: []
+      responses:
+        '200':
+          description: Environment variable returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderEnvVar'
+        default:
+          $ref: '#/components/responses/VendorError'
+    put:
+      tags: [Render Services]
+      operationId: renderPutEnvironmentVariable
+      summary: Add or update one Render environment variable
+      x-agent-forge-operation: set_env_variable
+      x-side-effect: update
+      x-sensitive-response: true
+      x-reconciliation: retrieve variable by key without logging its value
+      x-compensation: restore prior value captured in protected process memory
+      x-source: https://api-docs.render.com/reference/update-env-var
+      servers:
+        - url: https://api.render.com/v1
+      security:
+        - RenderBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderEnvVarUpdateRequest'
+      responses:
+        '200':
+          description: Environment variable updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderEnvVar'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /services/{serviceId}/deploys:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    post:
+      tags: [Render Deploys]
+      operationId: renderTriggerDeploy
+      summary: Trigger a Render deploy
+      x-agent-forge-operation: trigger_deploy
+      x-side-effect: create
+      x-reconciliation: list deploys and match commitId or returned deploy id
+      x-compensation: no automatic delete; use reviewed rollback endpoint with separate approval
+      x-source: https://api-docs.render.com/reference/create-deploy
+      servers:
+        - url: https://api.render.com/v1
+      security:
+        - RenderBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderDeployRequest'
+      responses:
+        '201':
+          description: Deploy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderDeploy'
+        '202':
+          description: Deploy queued
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /services/{serviceId}/deploys/{deployId}:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+      - $ref: '#/components/parameters/DeployId'
+    get:
+      tags: [Render Deploys]
+      operationId: renderGetDeploy
+      summary: Retrieve a Render deploy
+      x-agent-forge-operation: get_deploy_status
+      x-side-effect: none
+      x-source: https://api-docs.render.com/reference/retrieve-deploy
+      servers:
+        - url: https://api.render.com/v1
+      security:
+        - RenderBearer: []
+      responses:
+        '200':
+          description: Deploy returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderDeploy'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /rest/v1/{tableName}:
+    parameters:
+      - name: tableName
+        in: path
+        required: true
+        description: Allowlisted table configured for the current operation
+        schema:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*$'
+    get:
+      tags: [Supabase Data]
+      operationId: supabaseSelectRows
+      summary: Read rows through the Supabase Data REST API
+      x-agent-forge-operation: select_rows
+      x-side-effect: none
+      x-table-policy: tableName must be selected from an adapter allowlist, never model text
+      x-source: https://supabase.com/docs/guides/api
+      servers:
+        - url: https://{projectRef}.supabase.co
+          variables:
+            projectRef:
+              default: replace-at-runtime
+      security:
+        - SupabaseApiKey: []
+          SupabaseBearer: []
+      parameters:
+        - name: select
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: organization_id
+          in: query
+          required: false
+          schema:
+            type: string
+            description: PostgREST filter expression, built by deterministic adapter code
+      responses:
+        '200':
+          description: Rows returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        default:
+          $ref: '#/components/responses/VendorError'
+    post:
+      tags: [Supabase Data]
+      operationId: supabaseInsertRow
+      summary: Insert one allowlisted row through the Supabase Data REST API
+      x-agent-forge-operation: insert_org_record
+      x-side-effect: create
+      x-table-policy: tableName and body schema must be selected by deterministic adapter code
+      x-reconciliation: select by immutable organization id before retry
+      x-compensation: delete exact inserted row only after separate approval
+      x-source: https://supabase.com/docs/guides/api
+      servers:
+        - url: https://{projectRef}.supabase.co
+          variables:
+            projectRef:
+              default: replace-at-runtime
+      security:
+        - SupabaseApiKey: []
+          SupabaseBearer: []
+      parameters:
+        - name: Prefer
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: [return=representation, return=minimal]
+            default: return=representation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupabaseOrganizationInsert'
+      responses:
+        '201':
+          description: Row inserted
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SupabaseOrganizationRecord'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+  /res/v1/web/search:
+    get:
+      tags: [Brave Search]
+      operationId: braveWebSearch
+      summary: Search the public web
+      x-agent-forge-operation: web_search
+      x-side-effect: none
+      x-source: https://api-dashboard.search.brave.com/api-reference/web/search/get
+      servers:
+        - url: https://api.search.brave.com
+      security:
+        - BraveSubscriptionToken: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 400
+        - name: count
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+        - name: country
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            default: US
+        - name: search_lang
+          in: query
+          required: false
+          schema:
+            type: string
+            default: en
+        - name: safesearch
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [off, moderate, strict]
+            default: moderate
+      responses:
+        '200':
+          description: Search results returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BraveSearchResponse'
+        default:
+          $ref: '#/components/responses/VendorError'
+
+components:
+  securitySchemes:
+    VapiBearer:
+      type: http
+      scheme: bearer
+      description: VAPI_API_KEY, loaded only by adapters/vapi.py
+    MakeToken:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Value is `Token {MAKE_API_TOKEN}`
+    RenderBearer:
+      type: http
+      scheme: bearer
+      description: HOSTING_API_TOKEN, for Render v1 API
+    SupabaseApiKey:
+      type: apiKey
+      in: header
+      name: apikey
+    SupabaseBearer:
+      type: http
+      scheme: bearer
+      description: Project-scoped server credential; never exposed to a model
+    BraveSubscriptionToken:
+      type: apiKey
+      in: header
+      name: X-Subscription-Token
+
+  parameters:
+    AssistantId:
+      name: assistantId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    ToolId:
+      name: toolId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    PhoneNumberId:
+      name: phoneNumberId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    ScenarioId:
+      name: scenarioId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    HookId:
+      name: hookId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    ServiceId:
+      name: serviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    DeployId:
+      name: deployId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    EnvVarKey:
+      name: envVarKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Z][A-Z0-9_]*$'
+
+  schemas:
+    JsonSchema:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [object, array, string, number, integer, boolean]
+        description:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/JsonSchema'
+        required:
+          type: array
+          items:
+            type: string
+        items:
+          $ref: '#/components/schemas/JsonSchema'
+        enum:
+          type: array
+          items: {}
+        format:
+          type: string
+        pattern:
+          type: string
+        additionalProperties:
+          oneOf:
+            - type: boolean
+            - $ref: '#/components/schemas/JsonSchema'
+      additionalProperties: true
+
+    VapiFunctionDefinition:
+      type: object
+      required: [name, parameters]
+      properties:
+        name:
+          type: string
+          pattern: '^[A-Za-z_][A-Za-z0-9_-]{0,63}$'
+        description:
+          type: string
+        parameters:
+          $ref: '#/components/schemas/JsonSchema'
+      additionalProperties: false
+
+    VapiServer:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https://'
+        timeoutSeconds:
+          type: number
+          minimum: 1
+          maximum: 120
+      additionalProperties: true
+
+    VapiToolCreateRequest:
+      type: object
+      required: [type, function, server]
+      properties:
+        type:
+          type: string
+          enum: [function]
+        function:
+          $ref: '#/components/schemas/VapiFunctionDefinition'
+        server:
+          $ref: '#/components/schemas/VapiServer'
+        async:
+          type: boolean
+          default: false
+        messages:
+          type: array
+          items:
+            type: object
+            required: [type]
+            properties:
+              type:
+                type: string
+                enum: [request-start, request-complete, request-failed, request-response-delayed]
+              content:
+                type: string
+            additionalProperties: true
+      additionalProperties: true
+
+    VapiToolUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/VapiToolCreateRequest'
+
+    VapiTool:
+      allOf:
+        - $ref: '#/components/schemas/VapiToolCreateRequest'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+            orgId:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+          additionalProperties: true
+
+    VapiAssistantCreateRequest:
+      type: object
+      required: [name, model, voice]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        firstMessage:
+          type: string
+        model:
+          type: object
+          required: [provider, model, messages]
+          properties:
+            provider:
+              type: string
+            model:
+              type: string
+            messages:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [role, content]
+                properties:
+                  role:
+                    type: string
+                    enum: [system, assistant, user]
+                  content:
+                    type: string
+                additionalProperties: false
+            toolIds:
+              type: array
+              items:
+                type: string
+          additionalProperties: true
+        voice:
+          type: object
+          required: [provider, voiceId]
+          properties:
+            provider:
+              type: string
+            voiceId:
+              type: string
+          additionalProperties: true
+        server:
+          $ref: '#/components/schemas/VapiServer'
+      additionalProperties: true
+
+    VapiAssistantUpdateRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+        firstMessage:
+          type: string
+        model:
+          $ref: '#/components/schemas/VapiAssistantCreateRequest/properties/model'
+        voice:
+          $ref: '#/components/schemas/VapiAssistantCreateRequest/properties/voice'
+        server:
+          $ref: '#/components/schemas/VapiServer'
+      additionalProperties: true
+
+    VapiAssistant:
+      allOf:
+        - $ref: '#/components/schemas/VapiAssistantCreateRequest'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+            orgId:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+          additionalProperties: true
+
+    VapiPhoneNumberUpdateRequest:
+      type: object
+      required: [assistantId]
+      properties:
+        assistantId:
+          oneOf:
+            - type: string
+              minLength: 1
+            - type: 'null'
+      additionalProperties: true
+
+    VapiPhoneNumber:
+      type: object
+      required: [id, number]
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+          pattern: '^\+[1-9][0-9]{7,14}$'
+        assistantId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        provider:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+
+    MakeScenarioCreateRequest:
+      type: object
+      required: [blueprint, teamId, scheduling]
+      properties:
+        blueprint:
+          type: string
+          description: JSON-serialized Make blueprint
+          contentMediaType: application/json
+        teamId:
+          type: integer
+          minimum: 1
+        scheduling:
+          type: string
+          description: JSON-serialized scheduling object
+          contentMediaType: application/json
+        folderId:
+          type: integer
+          minimum: 1
+        basedon:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+
+    MakeScenario:
+      type: object
+      required: [id, name, teamId]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        teamId:
+          type: integer
+        hookId:
+          oneOf:
+            - type: integer
+            - type: 'null'
+        description:
+          type: string
+        folderId:
+          oneOf:
+            - type: integer
+            - type: 'null'
+        isActive:
+          type: boolean
+        isinvalid:
+          type: boolean
+        islocked:
+          type: boolean
+        isPaused:
+          type: boolean
+        scenarioVersion:
+          type: integer
+        lastEdit:
+          type: string
+          format: date-time
+        scheduling:
+          type: object
+          additionalProperties: true
+      additionalProperties: true
+
+    MakeBlueprintResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        response:
+          type: object
+          required: [blueprint]
+          properties:
+            blueprint:
+              type: object
+              required: [flow, name]
+              properties:
+                flow:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, module]
+                    properties:
+                      id:
+                        type: integer
+                      module:
+                        type: string
+                      mapper:
+                        type: object
+                        additionalProperties: true
+                      onerror:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                    additionalProperties: true
+                name:
+                  type: string
+                metadata:
+                  type: object
+                  additionalProperties: true
+              additionalProperties: true
+            scheduling:
+              type: object
+              additionalProperties: true
+          additionalProperties: true
+      additionalProperties: true
+
+    MakeActionResponse:
+      type: object
+      additionalProperties: true
+
+    MakeHookCreateRequest:
+      type: object
+      required: [name, teamId, typeName, method, headers, stringify]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        teamId:
+          type: string
+          minLength: 1
+        typeName:
+          type: string
+          minLength: 1
+        method:
+          type: boolean
+        headers:
+          type: boolean
+        stringify:
+          type: boolean
+        __IMTCONN__:
+          type: integer
+        formId:
+          type: string
+      additionalProperties: false
+
+    MakeHook:
+      type: object
+      required: [id, name, teamId, enabled]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        teamId:
+          type: integer
+        typeName:
+          type: string
+        scenarioId:
+          oneOf:
+            - type: integer
+            - type: 'null'
+        url:
+          type: string
+          format: uri
+        enabled:
+          type: boolean
+        gone:
+          type: boolean
+        queueCount:
+          type: integer
+        data:
+          type: object
+          additionalProperties: true
+      additionalProperties: true
+
+    MakeHookPing:
+      type: object
+      required: [address, attached, learning, gone]
+      properties:
+        address:
+          type: string
+          format: uri
+        attached:
+          type: boolean
+        learning:
+          type: boolean
+        gone:
+          type: boolean
+        dataStructure:
+          oneOf:
+            - type: 'null'
+            - type: array
+              items:
+                type: object
+                required: [name, type]
+                properties:
+                  name:
+                    type: string
+                  type:
+                    type: string
+                additionalProperties: true
+      additionalProperties: true
+
+    RenderEnvVarUpdateRequest:
+      oneOf:
+        - type: object
+          required: [value]
+          properties:
+            value:
+              type: string
+          additionalProperties: false
+        - type: object
+          required: [generateValue]
+          properties:
+            generateValue:
+              type: boolean
+              const: true
+          additionalProperties: false
+
+    RenderEnvVar:
+      type: object
+      required: [key, value]
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+          writeOnly: true
+      additionalProperties: false
+
+    RenderDeployRequest:
+      type: object
+      properties:
+        clearCache:
+          type: string
+          enum: [clear, do_not_clear]
+          default: do_not_clear
+        commitId:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+        deployMode:
+          type: string
+          enum: [deploy_only, build_and_deploy]
+          default: build_and_deploy
+      additionalProperties: false
+      allOf:
+        - if:
+            required: [deployMode]
+            properties:
+              deployMode:
+                const: deploy_only
+          then:
+            not:
+              anyOf:
+                - required: [clearCache]
+                - required: [commitId]
+                - required: [imageUrl]
+
+    RenderDeploy:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - created
+            - queued
+            - build_in_progress
+            - update_in_progress
+            - live
+            - deactivated
+            - build_failed
+            - update_failed
+            - canceled
+            - pre_deploy_in_progress
+            - pre_deploy_failed
+        trigger:
+          type: string
+          enum:
+            - api
+            - blueprint_sync
+            - deploy_hook
+            - deployed_by_render
+            - manual
+            - other
+            - new_commit
+            - rollback
+            - service_resumed
+            - service_updated
+        commit:
+          type: object
+          properties:
+            id:
+              type: string
+            message:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+          additionalProperties: true
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+
+    SupabaseOrganizationInsert:
+      type: object
+      required: [organization_id, business_name]
+      properties:
+        organization_id:
+          type: string
+          pattern: '^[a-z0-9_]+$'
+        business_name:
+          type: string
+          minLength: 1
+        timezone:
+          type: string
+          minLength: 1
+        configuration:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+
+    SupabaseOrganizationRecord:
+      allOf:
+        - $ref: '#/components/schemas/SupabaseOrganizationInsert'
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            created_at:
+              type: string
+              format: date-time
+          additionalProperties: true
+
+    BraveSearchResponse:
+      type: object
+      properties:
+        type:
+          type: string
+        query:
+          type: object
+          properties:
+            original:
+              type: string
+            show_strict_warning:
+              type: boolean
+          additionalProperties: true
+        web:
+          type: object
+          properties:
+            type:
+              type: string
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/BraveWebResult'
+          additionalProperties: true
+      additionalProperties: true
+
+    BraveWebResult:
+      type: object
+      required: [title, url]
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        description:
+          type: string
+        age:
+          type: string
+        page_age:
+          type: string
+          format: date-time
+        profile:
+          type: object
+          properties:
+            long_name:
+              type: string
+            url:
+              type: string
+              format: uri
+          additionalProperties: true
+      additionalProperties: true
+
+    VendorError:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          oneOf:
+            - type: string
+            - type: integer
+        message:
+          type: string
+        error:
+          type: string
+        detail:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+      additionalProperties: true
+
+  responses:
+    VendorError:
+      description: Vendor error. Adapter must sanitize before persistence.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/VendorError'
+
+x-cli-contracts:
+  supabase_migration:
+    source: https://supabase.com/docs/guides/deployment/database-migrations
+    local_validate:
+      command: supabase db reset
+      working_directory: repository root
+      side_effect: isolated local database only
+    staging_apply:
+      command: supabase db push --linked
+      side_effect: schema write to the explicitly linked staging project
+      approval_required: true
+      preconditions:
+        - exact Supabase CLI version is pinned
+        - linked project reference matches approved target
+        - migration hash matches approved artifact
+        - local reset and isolation tests passed
+    production_apply:
+      command: supabase db push --linked
+      side_effect: schema write to the explicitly linked production project
+      approval_required: true
+      preconditions:
+        - production project reference is displayed and approved
+        - staging migration and tenant-isolation tests passed
+        - backup or explicit non-restorable-data warning exists
+    reconciliation:
+      - supabase migration list --linked
+      - compare live schema and policy hashes through deterministic read tools
+
+x-project-contracts:
+  backend_health:
+    description: |
+      Health is a project-owned endpoint, not a Render API endpoint. Its exact
+      path MUST be configured as HOSTING_HEALTH_URL and restricted to HTTPS.
+      The adapter performs GET and accepts only a JSON object matching the
+      schema below. No default path is invented by this contract.
+    method: GET
+    configured_url_env: HOSTING_HEALTH_URL
+    security: no secret query parameters; optional deterministic header configured outside model context
+    response_schema:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, healthy]
+        version:
+          type: string
+        commit:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+      additionalProperties: true
+
+x-review-sources:
+  vapi:
+    - https://docs.vapi.ai/api-reference/assistants/create
+    - https://docs.vapi.ai/api-reference/assistants/update
+    - https://docs.vapi.ai/api-reference/assistants/delete
+    - https://docs.vapi.ai/api-reference/tools/create
+    - https://docs.vapi.ai/api-reference/tools/list
+    - https://docs.vapi.ai/api-reference/tools/update
+    - https://docs.vapi.ai/api-reference/phone-numbers/get
+    - https://docs.vapi.ai/api-reference/phone-numbers/update
+  make:
+    - https://developers.make.com/api-documentation/api-reference/scenarios
+    - https://developers.make.com/api-documentation/api-reference/scenarios/blueprints
+    - https://developers.make.com/api-documentation/api-reference/hooks
+  render:
+    - https://api-docs.render.com/reference/create-deploy
+    - https://api-docs.render.com/reference/retrieve-deploy
+    - https://api-docs.render.com/reference/update-env-var
+  supabase:
+    - https://supabase.com/docs/guides/api
+    - https://supabase.com/docs/guides/deployment/database-migrations
+    - https://supabase.com/docs/guides/local-development/overview
+  brave:
+    - https://api-dashboard.search.brave.com/api-reference/web/search/get

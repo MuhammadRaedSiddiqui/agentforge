@@ -1,0 +1,45 @@
+{
+  "type": "function",
+  "function": {
+    "name": "check_availability",
+    "description": "Check available appointment slots for {{organization_display_name}}. Returns a list of available time slots for the requested date and service type.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "The date to check availability for, in YYYY-MM-DD format (e.g., 2024-03-15)",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "service_type": {
+          "type": "string",
+          "description": "The type of service requested (e.g., 'consultation', 'standard', 'premium')",
+          "enum": ["{{service_types}}"]
+        },
+        "duration_minutes": {
+          "type": "integer",
+          "description": "Expected duration of the appointment in minutes",
+          "default": 60,
+          "minimum": 15,
+          "maximum": 240
+        }
+      },
+      "required": ["date"]
+    }
+  },
+  "async": false,
+  "server": {
+    "url": "{{server_url}}/webhook/{{organization_id}}/availability",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Organization-ID": "{{organization_id}}"
+    }
+  },
+  "metadata": {
+    "capability": "availability",
+    "organization_id": "{{organization_id}}",
+    "template_version": "1.0.0",
+    "requires_auth": true
+  }
+}
