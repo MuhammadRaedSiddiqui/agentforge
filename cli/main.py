@@ -52,7 +52,7 @@ def load_intake_file(file_path: str) -> dict[str, Any]:
             intake = json.load(f)
             return cast(dict[str, Any], intake)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in intake file: {e}")
+            raise ValueError(f"Invalid JSON in intake file: {e}") from e
 
 
 def cmd_config_check(args: argparse.Namespace) -> int:
@@ -348,7 +348,6 @@ def _run_execute(
 
     try:
         session = session_manager.start_session(organization_id, operator)
-        session_id = session.session_id
         print(f"  ✓ Session started: {session}")
     except Exception as e:
         InteractivePrompts.display_error(f"Failed to start session: {e}")
@@ -390,19 +389,15 @@ def _run_execute(
         # Generate artifacts using specialist agents
         print("  • Generating Vapi artifacts...")
         vapi_agent = VapiAgent()
-        vapi_results: list[Any] = []  # TODO: Generate Vapi artifacts
 
         print("  • Generating Make artifacts...")
         make_agent = MakeAgent()
-        make_results: list[Any] = []  # TODO: Generate Make artifacts
 
         print("  • Generating Supabase artifacts...")
         supabase_agent = SupabaseAgent()
-        supabase_results: list[Any] = []  # TODO: Generate Supabase artifacts
 
         print("  • Generating Node.js artifacts...")
         nodejs_agent = NodeJsAgent()
-        nodejs_results: list[Any] = []  # TODO: Generate Node.js artifacts
 
         # Execute every planned generation task. The legacy empty lists above
         # are retained only for display compatibility; they are not the source
@@ -504,7 +499,7 @@ def _run_execute(
             if existing_intakes:
                 intake_id = existing_intakes[0]["intake_id"]
             else:
-                raise Exception(f"Failed to create or retrieve intake: {e}")
+                raise Exception(f"Failed to create or retrieve intake: {e}") from e
 
         # Now create the deployment with the intake_id
         internal_client.create_deployment(
@@ -597,7 +592,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     """
     try:
         # Load configuration
-        config = load_config()
+        load_config()
 
         # Load intake
         intake = load_intake_file(args.intake)
@@ -963,7 +958,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             print("Verifying overall system health...")
             # Check configuration
             try:
-                config = load_config()
+                load_config()
                 print("  ✓ Configuration valid")
             except Exception as e:
                 print(f"  ✗ Configuration error: {e}")
@@ -1104,7 +1099,7 @@ def cmd_update(args: argparse.Namespace) -> int:
     """
     try:
         # Load configuration
-        config = load_config()
+        load_config()
 
         # Load updates from JSON file
         updates_path = Path(args.updates)
@@ -1163,17 +1158,11 @@ def cmd_update(args: argparse.Namespace) -> int:
         if args.intent == "update_assistant":
             vapi_state = current_state.get("platforms", {}).get("vapi", {})
             assistants = vapi_state.get("assistants", [])
-            if assistants:
-                current_values = assistants[0]  # Use first assistant
-            else:
-                current_values = {}
+            current_values = assistants[0] if assistants else {}
         elif args.intent == "update_scenario":
             make_state = current_state.get("platforms", {}).get("make", {})
             scenarios = make_state.get("scenarios", [])
-            if scenarios:
-                current_values = scenarios[0]  # Use first scenario
-            else:
-                current_values = {}
+            current_values = scenarios[0] if scenarios else {}
         else:
             current_values = {}
 
@@ -1235,12 +1224,56 @@ def cmd_update(args: argparse.Namespace) -> int:
             print("\n⚠️  This will modify external resources")
             print("   Each change will require individual approval")
 
-            # Reuse US3 approval flow and US4 recovery (T151)
-            # For now, inform user this is not yet implemented
-            print("\n✗ Update execution not yet fully implemented")
-            print("  This will go through the same approval and recovery flow")
-            print("  as new onboarding (User Stories 3 & 4)")
-            return 1
+            from orchestrator.orchestrator import Orchestrator
+            from shared.ids import generate_deployment_id
+
+            new_deployment_id = generate_deployment_id()
+
+            update_tasks = regenerator.generate_update_tasks(
+                deployment_id=new_deployment_id,
+                organization_id=args.organization,
+                intent=args.intent,
+                changes=changes,
+                current_state=current_state,
+            )
+
+            if not update_tasks:
+                print("\n✓ No tasks to execute")
+                return 0
+
+            proposed_actions = _build_update_actions(
+                update_tasks, args.organization, changes, current_state
+            )
+
+            if not proposed_actions:
+                print("\n✓ No actions required")
+                return 0
+
+            internal_store.create_deployment({
+                "deployment_id": new_deployment_id,
+                "organization_id": args.organization,
+                "status": "executing",
+                "intent": args.intent,
+                "parent_deployment_id": deployment_id,
+            })
+
+            orchestrator = Orchestrator(internal_store)
+            result = orchestrator.execute_deployment(
+                deployment_id=new_deployment_id,
+                organization_id=args.organization,
+                operator="cli_operator",
+                proposed_actions=proposed_actions,
+            )
+
+            if result.get("status") == "completed":
+                print(f"\n✓ Update complete — {result.get('completed_actions', 0)} action(s) applied")
+                return 0
+            elif result.get("status") == "aborted":
+                print(f"\n⚠️  Update aborted: {result.get('message', '')}")
+                return 1
+            else:
+                print(f"\n✗ Update finished with status: {result.get('status')}")
+                return 1
 
         else:
             print("\nError: Specify either --dry-run or --execute", file=sys.stderr)
@@ -1252,6 +1285,75 @@ def cmd_update(args: argparse.Namespace) -> int:
 
         traceback.print_exc()
         return 1
+
+
+def _build_update_actions(
+    tasks: list,
+    organization_id: str,
+    changes: dict,
+    current_state: dict,
+) -> list:
+    """Build ProposedAction list from update tasks."""
+    from orchestrator.approval import build_proposed_action
+
+    actions = []
+    for task in tasks:
+        if task.agent_target == "vapi_agent" and task.action_type == "update_assistant":
+            vapi_state = current_state.get("platforms", {}).get("vapi", {})
+            assistants = vapi_state.get("assistants", [])
+            assistant_id = assistants[0]["id"] if assistants else None
+            if assistant_id:
+                actions.append(
+                    build_proposed_action(
+                        platform="vapi",
+                        operation="update_assistant",
+                        target=f"assistant/{organization_id}",
+                        payload={
+                            "assistant_id": assistant_id,
+                            "updates": {k: v["to"] for k, v in changes.items()},
+                        },
+                        retry_policy="none",
+                        reconciliation_strategy="read_after_write",
+                        compensation_operation=None,
+                        expected_outcome=f"Update Vapi assistant for {organization_id}",
+                    )
+                )
+
+        elif task.agent_target == "make_agent" and task.action_type == "update_scenario":
+            make_state = current_state.get("platforms", {}).get("make", {})
+            scenarios = make_state.get("scenarios", [])
+            for scenario in scenarios:
+                actions.append(
+                    build_proposed_action(
+                        platform="make",
+                        operation="update_scenario_blueprint",
+                        target=f"scenario/{organization_id}/{scenario.get('id')}",
+                        payload={
+                            "scenario_id": scenario["id"],
+                            "updates": {k: v["to"] for k, v in changes.items()},
+                        },
+                        retry_policy="none",
+                        reconciliation_strategy="read_after_write",
+                        compensation_operation=None,
+                        expected_outcome=f"Update Make scenario {scenario.get('id')}",
+                    )
+                )
+
+        elif task.agent_target == "hosting_adapter" and task.action_type == "trigger_deploy":
+            actions.append(
+                build_proposed_action(
+                    platform="render",
+                    operation="trigger_deploy",
+                    target=f"deploy/{organization_id}",
+                    payload={"clear_cache": False},
+                    retry_policy="proven_idempotent",
+                    reconciliation_strategy="poll_status",
+                    compensation_operation=None,
+                    expected_outcome=f"Trigger redeploy for {organization_id}",
+                )
+            )
+
+    return actions
 
 
 def cmd_cleanup(args: argparse.Namespace) -> int:
@@ -1613,7 +1715,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
         # Create planner and task graph
         planner = Planner()
         task_graph = planner.create_task_graph(normalized_intake)
-        plan = planner.create_dry_run_plan(task_graph, normalized_intake)
+        planner.create_dry_run_plan(task_graph, normalized_intake)
 
         print("\nDeployment plan validated. Starting execution...")
         print("You will see an approval prompt for each platform action.\n")
@@ -1656,7 +1758,7 @@ def main() -> int:
     )
     config_subparsers = config_parser.add_subparsers(dest="config_command")
 
-    config_check_parser = config_subparsers.add_parser(
+    config_subparsers.add_parser(
         "check",
         help="Validate configuration",
     )
@@ -1796,7 +1898,7 @@ def main() -> int:
         help="Deployment ID to verify",
     )
 
-    verify_health_parser = verify_subparsers.add_parser(
+    verify_subparsers.add_parser(
         "health",
         help="Verify overall system health",
     )
@@ -1879,7 +1981,7 @@ def main() -> int:
     )
 
     # chat command (010-conversational-orchestrator)
-    chat_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "chat",
         help="Start a conversational session to deploy a new client",
     )
@@ -1891,12 +1993,12 @@ def main() -> int:
     )
     smoke_test_subparsers = smoke_test_parser.add_subparsers(dest="smoke_test_command")
 
-    smoke_test_gemini_parser = smoke_test_subparsers.add_parser(
+    smoke_test_subparsers.add_parser(
         "gemini",
         help="Test Gemini API connectivity",
     )
 
-    smoke_test_chroma_parser = smoke_test_subparsers.add_parser(
+    smoke_test_subparsers.add_parser(
         "chroma",
         help="Test Chroma vector store",
     )
