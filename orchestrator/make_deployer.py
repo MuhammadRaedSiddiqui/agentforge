@@ -136,7 +136,7 @@ class MakeScenarioDeployer:
         path = Path(blueprint_path)
         if not path.exists():
             raise FileNotFoundError(f"Blueprint not found: {blueprint_path}")
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
 
     def _inject_hook_id(

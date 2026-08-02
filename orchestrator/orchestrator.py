@@ -445,7 +445,7 @@ class Orchestrator:
         if operation == "create_assistant":
             config_path = payload.get("config_path")
             if config_path and Path(config_path).exists():
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     assistant_config = json.load(f)
             else:
                 assistant_config = payload
@@ -456,10 +456,9 @@ class Orchestrator:
             # Auto-assign phone number if provided
             phone_number_id = payload.get("phone_number_id")
             if phone_number_id and receipt.remote_id:
-                try:
+                import contextlib
+                with contextlib.suppress(Exception):
                     adapter.assign_phone_number(phone_number_id, receipt.remote_id)
-                except Exception:
-                    pass
             return receipt
         elif operation == "create_tool":
             return adapter.create_tool(payload)
@@ -507,7 +506,7 @@ class Orchestrator:
 
             blueprint = payload["blueprint"]
             if blueprint_path and Path(blueprint_path).exists():
-                with open(blueprint_path, "r", encoding="utf-8") as f:
+                with open(blueprint_path, encoding="utf-8") as f:
                     blueprint = json.load(f)
             receipt = adapter.create_scenario(
                 blueprint,
@@ -515,10 +514,9 @@ class Orchestrator:
                 payload.get("confirmed", False),
             )
             if receipt.remote_id:
-                try:
+                import contextlib
+                with contextlib.suppress(Exception):
                     adapter.activate_scenario(int(receipt.remote_id))
-                except Exception:
-                    pass
             return receipt
         elif operation == "create_hook":
             return adapter.create_hook(
