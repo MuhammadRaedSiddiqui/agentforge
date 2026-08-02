@@ -13,6 +13,7 @@ Coordinates the full deployment flow:
 from datetime import UTC, datetime
 from typing import Any
 
+from adapters.base import AdapterReceipt
 from adapters.supabase_internal import SupabaseInternalClient
 from cli.prompts import InteractivePrompts
 from orchestrator.approval import (
@@ -473,14 +474,38 @@ class Orchestrator:
     def _execute_make_action(self, adapter: Any, proposed_action: ProposedAction) -> Any:
         """Execute Make action."""
         import json
+        import os
         from pathlib import Path
+
+        from orchestrator.make_deployer import MakeScenarioDeployer
 
         operation = proposed_action.operation
         payload = proposed_action.payload
 
         if operation == "create_scenario":
-            blueprint = payload["blueprint"]
             blueprint_path = payload.get("blueprint_path")
+            capability = payload.get("blueprint", {}).get("capability", "")
+
+            if blueprint_path and Path(blueprint_path).exists() and capability:
+                deployer = MakeScenarioDeployer(adapter)
+                connection_id = os.getenv("MAKE_SUPABASE_CONNECTION_ID")
+                result = deployer.deploy_scenario(
+                    capability=capability,
+                    blueprint_path=blueprint_path,
+                    hook_name=payload.get("name", f"hook-{capability}"),
+                    connection_id=connection_id,
+                )
+                return AdapterReceipt(
+                    platform="make",
+                    operation="create_scenario",
+                    remote_id=str(result["scenario_id"]),
+                    status="success",
+                    response_data=result,
+                    idempotency_key=None,
+                    can_retry=False,
+                )
+
+            blueprint = payload["blueprint"]
             if blueprint_path and Path(blueprint_path).exists():
                 with open(blueprint_path, "r", encoding="utf-8") as f:
                     blueprint = json.load(f)

@@ -97,17 +97,13 @@ def inject_hook_urls(
 
     flow = blueprint.get("flow", [])
     for module in flow:
-        if module.get("module") == "webhook:CustomWebHook":
-            # Ensure hook parameter exists
+        if module.get("module") in ("webhook:CustomWebHook", "gateway:CustomWebHook"):
             if "parameters" not in module:
                 module["parameters"] = {}
 
-            # Hook ID is a placeholder that gets filled during deployment
-            # Format: {{HOOK_CAPABILITY_ID}}
             hook_placeholder = f"{{{{HOOK_{capability.upper()}_ID}}}}"
             module["parameters"]["hook"] = hook_placeholder
 
-            # Add metadata about this hook
             if "metadata" not in module:
                 module["metadata"] = {}
 
@@ -228,7 +224,7 @@ def extract_hook_references(blueprint: dict[str, Any]) -> list[str]:
     flow = blueprint.get("flow", [])
 
     for module in flow:
-        if module.get("module") == "webhook:CustomWebHook":
+        if module.get("module") in ("webhook:CustomWebHook", "gateway:CustomWebHook"):
             hook = module.get("parameters", {}).get("hook")
             if hook:
                 hook_refs.append(hook)
