@@ -462,6 +462,11 @@ class Orchestrator:
             return receipt
         elif operation == "create_tool":
             return adapter.create_tool(payload)
+        elif operation == "update_assistant":
+            return adapter.update_assistant(
+                payload["assistant_id"],
+                payload.get("updates", {}),
+            )
         elif operation == "assign_phone_number":
             return adapter.assign_phone_number(
                 payload["phone_number_id"],
@@ -528,6 +533,12 @@ class Orchestrator:
             )
         elif operation == "activate_scenario":
             return adapter.activate_scenario(payload["scenario_id"])
+        elif operation == "update_scenario_blueprint":
+            return adapter.update_scenario_blueprint(
+                payload["scenario_id"],
+                payload.get("updates", {}),
+                payload.get("confirmed", False),
+            )
         else:
             raise ValidationError(f"Unknown Make operation: {operation}")
 
