@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install ruff>=0.1.0
+      - name: Lint changed files (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD -- '*.py' | xargs -r ruff check
+      - name: Lint all (push to master)
+        if: github.event_name == 'push'
+        continue-on-error: true
+        run: ruff check .
+      - run: ruff format --check .
+        continue-on-error: true
+
+  typecheck:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt mypy types-requests types-pyyaml
+      - name: Type check
+        continue-on-error: true
+        run: mypy --ignore-missing-imports --no-error-summary adapters/ orchestrator/ shared/ agents/ cli/
+
+  test:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt pytest pytest-timeout pytest-mock
+      - run: pytest -m "unit or contract" --timeout=30 --tb=short -q
