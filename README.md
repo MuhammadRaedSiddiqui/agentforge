@@ -59,6 +59,31 @@ agent-forge verify health
 
 ## Usage
 
+### Conversational Onboarding (Primary)
+
+The conversational interface is the recommended way to onboard new clients. It guides you through an interactive dialogue to collect all required information.
+
+```bash
+# Start conversational onboarding (recommended)
+agent-forge
+
+# Or explicitly:
+agent-forge chat
+
+# The conversation will:
+# 1. Ask about your client (name, industry, capabilities needed)
+# 2. Collect voice preferences and business hours
+# 3. Confirm platform connection details
+# 4. Extract structured intake data automatically
+# 5. Validate voice ID against Vapi
+# 6. Present deployment plan for approval
+# 7. Execute with per-action approval gates
+```
+
+### File-Based Intake (Automation/Scripting)
+
+For automation, CI/CD pipelines, or when you have a pre-existing intake JSON:
+
 ```bash
 # Validate a client intake file
 agent-forge intake validate --file tests/fixtures/staging_client.json
@@ -68,7 +93,11 @@ agent-forge onboard --dry-run --intake tests/fixtures/staging_client.json
 
 # Execute deployment with per-action approval
 agent-forge onboard --execute --environment staging --intake <file>
+```
 
+### Other Commands
+
+```bash
 # Update existing deployment (dry-run)
 agent-forge update --organization <org> --intent update_assistant --updates <file> --dry-run
 
