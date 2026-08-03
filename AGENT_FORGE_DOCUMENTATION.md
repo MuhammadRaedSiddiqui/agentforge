@@ -497,6 +497,22 @@ agent-forge export --organization <org> --output <path>
 agent-forge restore --manifest <path>
 ```
 
+### Knowledge Base Management
+
+```bash
+# Gotcha proposal workflow (agent-assisted knowledge base growth)
+agent-forge gotcha list                           # List pending proposals
+agent-forge gotcha approve <number>               # Approve and convert to markdown
+agent-forge gotcha approve <number> --yes         # Skip confirmation prompt
+agent-forge gotcha approve <number> --no-rebuild  # Skip embedding rebuild
+agent-forge gotcha reject <number>                # Reject with optional reason
+agent-forge gotcha reject <number> --reason "..." # Reject with specified reason
+
+# Agents can propose new gotchas via propose_new_knowledge() tool
+# Proposals include duplicate detection (similarity > 0.75)
+# Approval converts JSON to markdown and rebuilds embeddings automatically
+```
+
 ---
 
 ## Development
@@ -542,7 +558,7 @@ The Dockerfile uses `python:3.11-slim`, installs from `requirements.txt`, and se
 
 ## Running Tests
 
-562 tests across 6 categories:
+618 tests across 7 categories:
 
 ```bash
 # All tests
@@ -553,9 +569,38 @@ pytest tests/unit/                # 321 unit tests
 pytest tests/contract/            # 97 contract tests
 pytest tests/integration/         # 63 integration tests
 pytest tests/security/            # 51 security tests
+pytest tests/regression/          # 56 regression tests (prompt/template stability)
 pytest tests/failure_injection/   # 20 failure injection tests
 pytest tests/restoration/         # 10 restoration tests
+
+# By marker
+pytest -m unit                    # Fast deterministic tests
+pytest -m regression              # Prompt and blueprint stability baselines
+pytest -m "unit or contract"      # CI gate (fast, no external deps)
+pytest -m "not integration"       # Skip tests requiring external services
 ```
+
+### Regression Test Suite
+
+The regression suite (`tests/regression/`) prevents breaking changes to:
+
+- **System prompts** (`test_prompt_stability.py`, 11 tests):
+  - Required sections present (role, gathering, confirmation, prohibitions)
+  - No JSON field names in user-facing text (critical UX requirement)
+  - Confirmation/cancellation keyword stability (yes/no/cancel must work)
+  - Phase transition correctness (gathering → confirming → executing)
+  - Confirmed intake structure (field mapping, required fields)
+
+- **Blueprint templates** (`test_blueprint_stability.py`, 45 tests):
+  - JSON structural validity for all capability blueprints
+  - Required fields (name, flow, metadata) present
+  - Module structure (id, module, version, mapper in each)
+  - First module is webhook trigger (gateway:CustomWebHook)
+  - Module count baselines: availability=4, booking=6, cancellation=4, rescheduling=5
+  - Webhook configuration present for parameterization
+  - Metadata consistency (version, capability, template_version)
+
+These tests establish stability baselines. Changes that break them require verification that the new behavior is intentional and documented.
 
 CI runs `pytest -m "unit or contract" --timeout=30` as the gate.
 
@@ -904,11 +949,27 @@ Agent Forge includes a local ChromaDB vector store containing:
 
 - **Platform guides**: API documentation for Vapi, Make.com, Supabase (`knowledge-base/docs/`)
 - **Platform gotchas**: Known issues and undocumented behaviors (`knowledge-base/gotchas/`)
-  - `make-blueprint-import-silent-failure.md`
-  - `supabase-rls-policy-not-applied.md`
-  - `vapi-phone-assignment-timeout.md`
+  - 11 verified gotchas covering Make.com, Vapi, Render, and Supabase
+  - Examples: `make-hook-first-deployment.md`, `vapi-voice-id-must-match-provider.md`
 
-The information agent queries this store during generation to avoid known pitfalls. Embeddings are built via:
+The information agent queries this store during generation to avoid known pitfalls.
+
+### Agent-Assisted Knowledge Growth
+
+Agents can propose new gotchas via the `propose_new_knowledge()` tool:
+
+1. **Agent proposes**: During troubleshooting, agents identify patterns and propose new gotchas
+2. **Duplicate detection**: System checks vector similarity (threshold > 0.75) against existing knowledge
+3. **Human review**: Proposals saved to `knowledge-base/proposals/` as JSON with duplicate warnings
+4. **Approval workflow**:
+   ```bash
+   agent-forge gotcha list                    # Review pending proposals
+   agent-forge gotcha approve <number>        # Convert to markdown, rebuild embeddings
+   agent-forge gotcha reject <number>         # Reject with logged reason
+   ```
+5. **Automatic integration**: Approved gotchas are converted to markdown, saved to `knowledge-base/gotchas/`, and embeddings are rebuilt automatically
+
+Embeddings can be manually managed via:
 
 ```bash
 python scripts/embed_knowledge.py --rebuild
@@ -960,7 +1021,7 @@ python scripts/embed_knowledge.py --verify
 - Unknown scheduling types default to `immediately`
 - Hook-first deployment: hooks created before scenarios via `MakeScenarioDeployer`
 - Fallback: if full blueprint rejected, create stub + update with full blueprint via PUT
-- Expected module counts: availability=4, booking=6, cancellation=8, rescheduling=10
+- Expected module counts: availability=4, booking=6, cancellation=4, rescheduling=5
 - Adapter methods: `create_scenario`, `get_scenario`, `list_scenarios`, `delete_scenario`, `get_scenario_blueprint`, `update_scenario_blueprint`, `activate_scenario`, `deactivate_scenario`, `create_hook`, `get_hook`, `list_hooks`, `delete_hook`, `verify_hook`
 
 ### Supabase

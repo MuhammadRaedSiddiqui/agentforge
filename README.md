@@ -112,6 +112,11 @@ agent-forge security scan --path outputs/
 
 # Cleanup staging resources (dry-run first)
 agent-forge cleanup --organization <org> --dry-run
+
+# Knowledge base management (gotcha proposals from agents)
+agent-forge gotcha list                    # List pending proposals
+agent-forge gotcha approve <number>        # Approve and convert to markdown
+agent-forge gotcha reject <number>         # Reject with optional reason
 ```
 
 ## Development
@@ -136,7 +141,7 @@ make lock
 ## Running Tests
 
 ```bash
-# All tests (562 total)
+# All tests (618 total)
 python -m pytest tests/
 
 # By category
@@ -144,8 +149,14 @@ python -m pytest tests/unit/                # 321 unit tests
 python -m pytest tests/contract/            # 97 contract tests
 python -m pytest tests/integration/         # 63 integration tests
 python -m pytest tests/security/            # 51 security tests
+python -m pytest tests/regression/          # 56 regression tests (prompt/template stability)
 python -m pytest tests/failure_injection/   # 20 failure injection tests
 python -m pytest tests/restoration/         # 10 restoration tests
+
+# Run specific test markers
+python -m pytest -m unit                    # Fast deterministic tests
+python -m pytest -m regression              # Prompt and blueprint stability tests
+python -m pytest -m "not integration"       # Skip tests requiring external services
 ```
 
 ## Docker
