@@ -51,6 +51,7 @@ markers = [
     "security: Security and secret safety tests",
     "restoration: Export and restore validation tests",
     "failure_injection: Deliberate failure scenario tests",
+    "regression: Regression tests for prompt and template stability",
 ]
 addopts = [
     "-v",
