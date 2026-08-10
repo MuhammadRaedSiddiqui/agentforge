@@ -116,9 +116,10 @@ def propose_new_knowledge(
     topic: str,
 ) -> dict[str, Any]:
     """
-    Propose a new knowledge entry for human review.
+    Propose a new knowledge entry for human review with duplicate checking.
 
     New knowledge entries require human approval before being marked as verified.
+    This function checks for similar existing gotchas before proposing.
 
     Args:
         symptom: Problem symptom
@@ -128,13 +129,29 @@ def propose_new_knowledge(
         topic: Topic category
 
     Returns:
-        Dictionary with proposal details
+        Dictionary with proposal details and duplicate check results
     """
     import json
     from datetime import UTC, datetime
     from pathlib import Path
 
-    # Create proposal structure
+    from agents.information_agent.rag import KnowledgeRetrieval
+
+    # Step 1: Check for duplicates
+    retrieval = KnowledgeRetrieval()
+    duplicate_check = retrieval.search_knowledge(
+        query=f"{platform} {topic} {symptom}",
+        verified_only=True,
+        n_results=3,
+    )
+
+    # Flag potential duplicates (similarity > 0.75)
+    potential_duplicates = [
+        match for match in duplicate_check
+        if match.get("similarity", 0) > 0.75
+    ]
+
+    # Step 2: Create proposal structure
     proposal = {
         "symptom": symptom,
         "root_cause": root_cause,
@@ -144,15 +161,35 @@ def propose_new_knowledge(
         "proposed_at": datetime.now(UTC).isoformat(),
         "verification_status": "proposed",
         "requires_approval": True,
+        "duplicate_check": {
+            "performed": True,
+            "potential_duplicates": len(potential_duplicates),
+            "similar_gotchas": [
+                {
+                    "id": match["id"],
+                    "similarity": match["similarity"],
+                    "source": match["metadata"].get("source", "unknown"),
+                }
+                for match in potential_duplicates
+            ],
+        },
     }
 
-    # Save to proposals directory
+    # Step 3: Save to proposals directory
     proposals_dir = Path("knowledge-base/proposals")
     proposals_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate filename from symptom
     filename_slug = symptom.lower()[:50].replace(" ", "-").replace("/", "-")
+    # Remove non-alphanumeric characters
+    filename_slug = "".join(c if c.isalnum() or c == "-" else "" for c in filename_slug)
     proposal_file = proposals_dir / f"{filename_slug}.json"
+
+    # Handle filename collisions
+    counter = 1
+    while proposal_file.exists():
+        proposal_file = proposals_dir / f"{filename_slug}-{counter}.json"
+        counter += 1
 
     # Save proposal
     with open(proposal_file, "w", encoding="utf-8") as f:
@@ -161,12 +198,15 @@ def propose_new_knowledge(
     return {
         "status": "proposed",
         "proposal_file": str(proposal_file),
-        "message": f"Knowledge proposal saved to {proposal_file}. Requires human approval before becoming verified.",
+        "duplicate_check": proposal["duplicate_check"],
+        "message": f"Knowledge proposal saved to {proposal_file}. "
+                   f"Found {len(potential_duplicates)} potential duplicate(s). "
+                   "Requires human approval before becoming verified.",
         "next_steps": [
+            "Review potential duplicates (if any)",
             "Human reviewer should verify accuracy",
-            "Check for duplicates or contradictions",
-            "Convert to proper gotcha Markdown format if approved",
-            "Rebuild embeddings after approval",
+            "Use 'agent-forge gotcha review' to approve or reject",
+            "Embeddings will be rebuilt automatically after approval",
         ],
     }
 

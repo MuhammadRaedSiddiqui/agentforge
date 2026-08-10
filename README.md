@@ -2,17 +2,33 @@
 
 Safe client deployment automation. Onboards new clients to voice assistant infrastructure (Vapi, Make.com, Supabase, hosting) through a human-approved, auditable pipeline with failure recovery.
 
+[![CI](https://github.com/MuhammadRaedSiddiqui/agentforge/actions/workflows/ci.yml/badge.svg)](https://github.com/MuhammadRaedSiddiqui/agentforge/actions/workflows/ci.yml)
+[![Security Scan](https://github.com/MuhammadRaedSiddiqui/agentforge/actions/workflows/security.yml/badge.svg)](https://github.com/MuhammadRaedSiddiqui/agentforge/actions/workflows/security.yml)
+
+## Features
+
+- **Full onboarding pipeline** — conversational intake to deployed infrastructure in one command
+- **Make.com blueprint deployment** — hook-first orchestration deploys complete multi-module scenarios (4-10 modules), not stubs
+- **Update/modification flow** — change voice, add capabilities, or modify webhooks without full re-deployment
+- **Human approval gates** — every external write requires explicit confirmation
+- **Failure recovery** — rollback, reconciliation, and retry with audit trail
+- **CI/CD** — GitHub Actions (lint, typecheck, test, secret scanning, Dependabot)
+
 ## Prerequisites
 
 - Python 3.11+
 - Staging accounts for: Vapi, Make.com, Supabase (2 projects), Render (or hosting provider)
+- Docker (optional, for containerized deployment)
 
 ## Setup
 
 ```bash
 # Clone and install
-git clone <repo-url> && cd agentforge
+git clone https://github.com/MuhammadRaedSiddiqui/agentforge.git && cd agentforge
 pip install -e ".[dev]"
+
+# Or use Make
+make install
 
 # Configure environment
 cp .env.example .env
@@ -29,69 +45,129 @@ python scripts/embed_knowledge.py --rebuild
 
 ```bash
 # Check all environment variables are set
-python -m cli.main config check
+agent-forge config check
 
 # Test model provider connectivity
-python -m cli.main smoke-test gemini
+agent-forge smoke-test gemini
 
 # Test vector store
-python -m cli.main smoke-test chroma
+agent-forge smoke-test chroma
 
 # System health check
-python -m cli.main verify health
+agent-forge verify health
 ```
 
 ## Usage
 
+### Conversational Onboarding (Primary)
+
+The conversational interface is the recommended way to onboard new clients. It guides you through an interactive dialogue to collect all required information.
+
+```bash
+# Start conversational onboarding (recommended)
+agent-forge
+
+# Or explicitly:
+agent-forge chat
+
+# The conversation will:
+# 1. Ask about your client (name, industry, capabilities needed)
+# 2. Collect voice preferences and business hours
+# 3. Confirm platform connection details
+# 4. Extract structured intake data automatically
+# 5. Validate voice ID against Vapi
+# 6. Present deployment plan for approval
+# 7. Execute with per-action approval gates
+```
+
+### File-Based Intake (Automation/Scripting)
+
+For automation, CI/CD pipelines, or when you have a pre-existing intake JSON:
+
 ```bash
 # Validate a client intake file
-python -m cli.main intake validate --file tests/fixtures/staging_client.json
+agent-forge intake validate --file tests/fixtures/staging_client.json
 
 # Preview onboarding plan (no external changes)
-python -m cli.main onboard --dry-run --intake tests/fixtures/staging_client.json
-
-# Generate deployment package
-python -m cli.main generate --intake tests/fixtures/staging_client.json
-
-# Validate generated package
-python -m cli.main validate package --manifest outputs/<org>/package_manifest.json
+agent-forge onboard --dry-run --intake tests/fixtures/staging_client.json
 
 # Execute deployment with per-action approval
-python -m cli.main onboard --execute --environment staging --intake <file>
+agent-forge onboard --execute --environment staging --intake <file>
+```
 
-# Update existing deployment
-python -m cli.main update --organization <org> --intent update_assistant --updates <file> --dry-run
+### Other Commands
+
+```bash
+# Update existing deployment (dry-run)
+agent-forge update --organization <org> --intent update_assistant --updates <file> --dry-run
+
+# Update existing deployment (execute)
+agent-forge update --organization <org> --intent update_assistant --updates <file> --execute
 
 # View deployment history
-python -m cli.main history --organization <org>
+agent-forge history --organization <org>
 
 # Security scan outputs
-python -m cli.main security scan --path outputs/
+agent-forge security scan --path outputs/
 
 # Cleanup staging resources (dry-run first)
-python -m cli.main cleanup --organization <org> --dry-run
+agent-forge cleanup --organization <org> --dry-run
+
+# Knowledge base management (gotcha proposals from agents)
+agent-forge gotcha list                    # List pending proposals
+agent-forge gotcha approve <number>        # Approve and convert to markdown
+agent-forge gotcha reject <number>         # Reject with optional reason
+```
+
+## Development
+
+```bash
+# Lint
+make lint
+
+# Type check
+make typecheck
+
+# Run unit + contract tests
+make test
+
+# Run all tests
+make test-all
+
+# Lock dependencies
+make lock
 ```
 
 ## Running Tests
 
 ```bash
-# All tests
+# All tests (618 total)
 python -m pytest tests/
 
 # By category
-python -m pytest tests/unit/           # 230 unit tests
-python -m pytest tests/contract/       # 97 contract tests
-python -m pytest tests/integration/    # 59 integration tests
-python -m pytest tests/security/       # 51 security tests
-python -m pytest tests/failure_injection/  # 20 failure injection tests
-python -m pytest tests/restoration/    # 10 restoration tests
+python -m pytest tests/unit/                # 321 unit tests
+python -m pytest tests/contract/            # 97 contract tests
+python -m pytest tests/integration/         # 63 integration tests
+python -m pytest tests/security/            # 51 security tests
+python -m pytest tests/regression/          # 56 regression tests (prompt/template stability)
+python -m pytest tests/failure_injection/   # 20 failure injection tests
+python -m pytest tests/restoration/         # 10 restoration tests
 
-# Type checking
-mypy orchestrator/ agents/ adapters/ shared/ cli/ --ignore-missing-imports
+# Run specific test markers
+python -m pytest -m unit                    # Fast deterministic tests
+python -m pytest -m regression              # Prompt and blueprint stability tests
+python -m pytest -m "not integration"       # Skip tests requiring external services
+```
 
-# Linting and formatting
-ruff check .
-ruff format --check .
+## Docker
+
+```bash
+# Build
+docker build -t agent-forge .
+
+# Run
+docker run --env-file .env agent-forge config check
+docker run --env-file .env agent-forge onboard --dry-run --intake /app/tests/fixtures/staging_client.json
 ```
 
 ## Project Structure
@@ -103,11 +179,44 @@ cli/              # CLI commands, session management, interactive prompts
 config/           # Agent registry, capability map, vendor contracts
 ground-truth/     # Source templates and schemas for artifact generation
 knowledge-base/   # Verified troubleshooting docs and gotchas
-orchestrator/     # Core logic: planner, state machine, approval, recovery, audit
+orchestrator/     # Core logic: planner, deployer, state machine, approval, recovery
 scripts/          # Operational scripts: embed, export, restore, reconcile
 shared/           # Shared contracts: errors, IDs, hashing, redaction
 supabase/         # Database migrations (14 tables)
-tests/            # Test suites by category
+templates/        # Deployment templates (backend server, packages)
+tests/            # Test suites by category (562 tests)
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CLI (cli/main.py)                                      │
+│  - onboard --dry-run | --execute                        │
+│  - update --intent <type> --execute                     │
+└────────────────┬────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│  Orchestrator                                           │
+│  - Planner (task graph from intake)                     │
+│  - SelectiveRegenerator (update flow)                   │
+│  - MakeScenarioDeployer (hook-first blueprint deploy)   │
+│  - Approval gate (human confirms each action)           │
+└────────────────┬────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│  Specialist Agents                                      │
+│  - VapiAgent (assistants, tools, phone numbers)         │
+│  - MakeAgent (scenarios, hooks, blueprints)             │
+│  - SupabaseAgent (schemas, RLS, migrations)             │
+│  - NodeJsAgent (backend code generation)                │
+└────────────────┬────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│  Adapters (HTTP clients with retry, audit, receipts)    │
+│  - Vapi API    - Make.com API    - Supabase API         │
+│  - Render API  - Brave Search API                       │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Key Design Principles
@@ -117,6 +226,7 @@ tests/            # Test suites by category
 - **No blind retries** — ambiguous outcomes require reconciliation first
 - **Audit trail** with tamper-evident hash chains
 - **Secrets never persisted** in artifacts, logs, exports, or model context
+- **Hook-first deployment** — Make.com hooks created before scenarios to ensure correct wiring
 
 ## Environment Variables
 
@@ -129,10 +239,11 @@ See `.env.example` for the full list. Key variables:
 | `AGENT_FORGE_ENV` | Must be `staging` (blocks production-looking targets) |
 | `SUPABASE_INTERNAL_URL` | Operational store (deployments, audit, state) |
 | `SUPABASE_CLIENT_URL` | Client-facing project (tenant data) |
+| `MAKE_API_TOKEN` | Make.com API token for scenario deployment |
+| `VAPI_API_KEY` | Vapi API key for assistant management |
 
 ## Documentation
 
 - `specs/001-agent-forge-onboarding/quickstart.md` — Full staging verification walkthrough
 - `specs/001-agent-forge-onboarding/spec.md` — Feature specification
 - `specs/001-agent-forge-onboarding/plan.md` — Architecture and technical plan
-- `HANDOFF.md` — Implementation handoff and next steps

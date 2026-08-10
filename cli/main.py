@@ -2003,6 +2003,58 @@ def main() -> int:
         help="Test Chroma vector store",
     )
 
+    # gotcha command (knowledge base proposal review)
+    gotcha_parser = subparsers.add_parser(
+        "gotcha",
+        help="Review and approve gotcha proposals from agents",
+    )
+    gotcha_subparsers = gotcha_parser.add_subparsers(dest="gotcha_command")
+
+    gotcha_subparsers.add_parser(
+        "list",
+        help="List pending gotcha proposals",
+    )
+
+    gotcha_approve_parser = gotcha_subparsers.add_parser(
+        "approve",
+        help="Approve a gotcha proposal",
+    )
+    gotcha_approve_parser.add_argument(
+        "proposal_number",
+        type=int,
+        help="Proposal number from 'gotcha list'",
+    )
+    gotcha_approve_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt",
+    )
+    gotcha_approve_parser.add_argument(
+        "--no-rebuild",
+        action="store_true",
+        help="Skip rebuilding embeddings after approval",
+    )
+
+    gotcha_reject_parser = gotcha_subparsers.add_parser(
+        "reject",
+        help="Reject a gotcha proposal",
+    )
+    gotcha_reject_parser.add_argument(
+        "proposal_number",
+        type=int,
+        help="Proposal number from 'gotcha list'",
+    )
+    gotcha_reject_parser.add_argument(
+        "--reason",
+        type=str,
+        help="Rejection reason",
+    )
+    gotcha_reject_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt",
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -2069,6 +2121,15 @@ def main() -> int:
             return cmd_smoke_test(args)
         else:
             smoke_test_parser.print_help()
+            return 1
+
+    elif args.command == "gotcha":
+        from cli.gotcha_commands import cmd_gotcha_review
+
+        if args.gotcha_command:
+            return cmd_gotcha_review(args)
+        else:
+            gotcha_parser.print_help()
             return 1
 
     else:
