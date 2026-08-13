@@ -47,7 +47,9 @@ PR #10 CI had two failing jobs: `lint` (ruff) and `secret-scan` (TruffleHog).
 
 Fix (user chose exclude-config over history rewrite): added `.trufflehog.exclude` (regex `^tests/unit/test_deployment_lookup\.py$`) and wired `--exclude-paths=.trufflehog.exclude` into `.github/workflows/security.yml` extra_args. Verified exclude suppresses the finding in git-source scans of a fresh clone. Also kept the `test_latest_picks_newest` rename (harmless, removes the token from HEAD).
 
-Result: `gh pr checks 10` — lint pass, test pass, typecheck pass, secret-scan pass.
+Follow-up (PR re-checked after PHR push): the secret-scan re-failed because the PHR's own Response snapshot quoted the full method name, and TruffleHog's git-history scan caught it in the intermediate PHR commit. Fixed by rephrasing the PHR text and adding the PHR file path to `.trufflehog.exclude`. Final `.trufflehog.exclude` excludes both `tests/unit/test_deployment_lookup.py` and the PHR file.
+
+Result: `gh pr checks 10` — lint pass, test pass, typecheck pass, secret-scan pass (all green).
 
 ## Outcome
 
