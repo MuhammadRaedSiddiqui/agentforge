@@ -501,6 +501,57 @@ paths:
                     type: integer
         default:
           $ref: '#/components/responses/VendorError'
+    patch:
+      tags: [Make Scenarios]
+      operationId: makeUpdateScenario
+      summary: Update a Make scenario (blueprint, scheduling, or name)
+      x-agent-forge-operation: update_scenario_blueprint
+      x-side-effect: update
+      x-reconciliation: retrieve scenario blueprint and require module set matches
+      x-source: https://developers.make.com/api-documentation/api-reference/scenarios
+      servers:
+        - url: https://{makeZone}.make.com/api/v2
+          variables:
+            makeZone:
+              default: us1
+              enum: [eu1, eu2, us1, us2]
+      security:
+        - MakeToken: []
+      parameters:
+        - name: confirmed
+          in: query
+          required: false
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                blueprint:
+                  type: string
+                  description: The scenario blueprint serialized as a JSON string
+                scheduling:
+                  type: string
+                  description: The scenario scheduling details serialized as a JSON string
+                name:
+                  type: string
+                  description: A new name of the scenario
+      responses:
+        '200':
+          description: Scenario updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scenario]
+                properties:
+                  scenario:
+                    $ref: '#/components/schemas/MakeScenario'
+        default:
+          $ref: '#/components/responses/VendorError'
 
   /scenarios/{scenarioId}/blueprint:
     parameters:
@@ -1478,6 +1529,11 @@ components:
         typeName:
           type: string
           minLength: 1
+          description: >-
+            Hook type. Native Make types are `gateway-webhook` and
+            `gateway-mailhook`; custom webhook modules use `gateway-webhook`.
+            `web` and `CustomWebHook` are module names, not hook types, and
+            will be rejected with SC400.
         method:
           type: boolean
         headers:

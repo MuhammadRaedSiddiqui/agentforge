@@ -40,7 +40,7 @@ class DeploymentLookup:
         deployments = self.client.select(
             "deployments",
             filters={"organization_id": organization_id},
-            order_by="created_at",
+            order_by="created_at desc",
             limit=1,
         )
 

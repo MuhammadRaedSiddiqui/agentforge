@@ -180,8 +180,8 @@ class TestMakeBlueprintValidator:
         allowed_modules = [
             "http:ActionSendData",
             "webhook:CustomWebHook",
-            "supabase:ActionInsertRow",
-            "supabase:ActionSelectRows",
+            "supabase:createARow",
+            "supabase:searchRows",
             "json:ParseJSON",
         ]
 

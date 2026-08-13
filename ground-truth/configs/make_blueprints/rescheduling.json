@@ -63,40 +63,34 @@
     },
     {
       "id": 2,
-      "module": "supabase:ActionSelectRows",
+      "module": "supabase:searchRows",
       "version": 1,
       "parameters": {
-        "connection": "{{supabase_connection_id}}",
-        "table": "appointments",
-        "select": "*",
-        "filter": [
-          {
-            "column": "organization_id",
-            "operator": "eq",
-            "value": "{{organization_id}}"
-          },
-          {
-            "column": "appointment_id",
-            "operator": "eq",
-            "value": "{{1.appointment_id}}"
-          },
-          {
-            "column": "client_phone",
-            "operator": "eq",
-            "value": "{{1.phone}}"
-          },
-          {
-            "column": "status",
-            "operator": "in",
-            "value": "('confirmed','rescheduled')"
-          }
-        ],
-        "limit": 1
+        "__IMTCONN__": "{{supabase_connection_id}}"
       },
       "mapper": {
-        "appointment_id": "{{1.appointment_id}}",
-        "phone": "{{1.phone}}",
-        "organization_id": "{{organization_id}}"
+        "table": "appointments",
+        "search": {
+          "logic": "and",
+          "items": [
+            {
+              "a": "organization_id",
+              "o": "text:eq.",
+              "b": "{{organization_id}}"
+            },
+            {
+              "a": "appointment_id",
+              "o": "text:eq.",
+              "b": "{{1.appointment_id}}"
+            },
+            {
+              "a": "client_phone",
+              "o": "text:eq.",
+              "b": "{{1.phone}}"
+            }
+          ]
+        },
+        "limit": 1
       },
       "metadata": {
         "designer": {
@@ -107,40 +101,39 @@
     },
     {
       "id": 3,
-      "module": "supabase:ActionSelectRows",
+      "module": "supabase:searchRows",
       "version": 1,
       "parameters": {
-        "connection": "{{supabase_connection_id}}",
-        "table": "availability_slots",
-        "select": "*",
-        "filter": [
-          {
-            "column": "organization_id",
-            "operator": "eq",
-            "value": "{{organization_id}}"
-          },
-          {
-            "column": "date",
-            "operator": "eq",
-            "value": "{{1.new_date}}"
-          },
-          {
-            "column": "time_slot",
-            "operator": "eq",
-            "value": "{{1.new_time}}"
-          },
-          {
-            "column": "is_available",
-            "operator": "eq",
-            "value": "true"
-          }
-        ],
-        "limit": 1
+        "__IMTCONN__": "{{supabase_connection_id}}"
       },
       "mapper": {
-        "new_date": "{{1.new_date}}",
-        "new_time": "{{1.new_time}}",
-        "organization_id": "{{organization_id}}"
+        "table": "availability_slots",
+        "search": {
+          "logic": "and",
+          "items": [
+            {
+              "a": "organization_id",
+              "o": "text:eq.",
+              "b": "{{organization_id}}"
+            },
+            {
+              "a": "date",
+              "o": "text:eq.",
+              "b": "{{1.new_date}}"
+            },
+            {
+              "a": "time_slot",
+              "o": "text:eq.",
+              "b": "{{1.new_time}}"
+            },
+            {
+              "a": "is_available",
+              "o": "boolean:eq.",
+              "b": "true"
+            }
+          ]
+        },
+        "limit": 1
       },
       "metadata": {
         "designer": {
@@ -153,7 +146,7 @@
       "id": 4,
       "module": "builtin:BasicRouter",
       "version": 1,
-      "parameters": {},
+      "parameters": {"else": 1},
       "mapper": null,
       "metadata": {
         "designer": {
@@ -166,27 +159,39 @@
           "flow": [
             {
               "id": 5,
-              "module": "supabase:ActionUpdateRows",
+              "module": "supabase:makeAnApiCall",
               "version": 1,
               "parameters": {
-                "connection": "{{supabase_connection_id}}",
-                "table": "availability_slots",
-                "filter": [
-                  {
-                    "column": "organization_id",
-                    "operator": "eq",
-                    "value": "{{organization_id}}"
-                  },
-                  {
-                    "column": "appointment_id",
-                    "operator": "eq",
-                    "value": "{{1.appointment_id}}"
-                  }
+                "__IMTCONN__": "{{supabase_connection_id}}"
+              },
+              "filter": {
+                "name": "Appointment and slot available",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{length(2.rows)}}",
+                      "b": "0",
+                      "o": "number:greater"
+                    },
+                    {
+                      "a": "{{length(3.rows)}}",
+                      "b": "0",
+                      "o": "number:greater"
+                    }
+                  ]
                 ]
               },
               "mapper": {
-                "is_available": "true",
-                "appointment_id": null
+                "url": "/rest/v1/availability_slots?organization_id=eq.{{organization_id}}&appointment_id=eq.{{1.appointment_id}}",
+                "method": "PATCH",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "body": "{\"is_available\": true, \"appointment_id\": null}"
               },
               "metadata": {
                 "designer": {
@@ -197,27 +202,22 @@
             },
             {
               "id": 6,
-              "module": "supabase:ActionUpdateRows",
+              "module": "supabase:makeAnApiCall",
               "version": 1,
               "parameters": {
-                "connection": "{{supabase_connection_id}}",
-                "table": "appointments",
-                "filter": [
-                  {
-                    "column": "appointment_id",
-                    "operator": "eq",
-                    "value": "{{1.appointment_id}}"
-                  }
-                ]
+                "__IMTCONN__": "{{supabase_connection_id}}"
               },
               "mapper": {
-                "date": "{{1.new_date}}",
-                "time": "{{1.new_time}}",
-                "status": "rescheduled",
-                "rescheduling_reason": "{{1.reason}}",
-                "rescheduled_at": "{{now}}",
-                "previous_date": "{{2.rows[0].date}}",
-                "previous_time": "{{2.rows[0].time}}"
+                "url": "/rest/v1/appointments?appointment_id=eq.{{1.appointment_id}}",
+                "method": "PATCH",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "body": "{\"date\": \"{{1.new_date}}\", \"time\": \"{{1.new_time}}\", \"status\": \"rescheduled\", \"rescheduling_reason\": \"{{1.reason}}\", \"rescheduled_at\": \"{{now}}\", \"previous_date\": \"{{2.rows[0].date}}\", \"previous_time\": \"{{2.rows[0].time}}\"}"
               },
               "metadata": {
                 "designer": {
@@ -228,32 +228,22 @@
             },
             {
               "id": 7,
-              "module": "supabase:ActionUpdateRows",
+              "module": "supabase:makeAnApiCall",
               "version": 1,
               "parameters": {
-                "connection": "{{supabase_connection_id}}",
-                "table": "availability_slots",
-                "filter": [
-                  {
-                    "column": "organization_id",
-                    "operator": "eq",
-                    "value": "{{organization_id}}"
-                  },
-                  {
-                    "column": "date",
-                    "operator": "eq",
-                    "value": "{{1.new_date}}"
-                  },
-                  {
-                    "column": "time_slot",
-                    "operator": "eq",
-                    "value": "{{1.new_time}}"
-                  }
-                ]
+                "__IMTCONN__": "{{supabase_connection_id}}"
               },
               "mapper": {
-                "is_available": "false",
-                "appointment_id": "{{1.appointment_id}}"
+                "url": "/rest/v1/availability_slots?organization_id=eq.{{organization_id}}&date=eq.{{1.new_date}}&time_slot=eq.{{1.new_time}}",
+                "method": "PATCH",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "body": "{\"is_available\": false, \"appointment_id\": \"{{1.appointment_id}}\"}"
               },
               "metadata": {
                 "designer": {
@@ -286,8 +276,7 @@
                 }
               }
             }
-          ],
-          "condition": "{{length(2.rows) > 0 && length(3.rows) > 0}}"
+          ]
         },
         {
           "flow": [
@@ -312,8 +301,7 @@
                 }
               }
             }
-          ],
-          "condition": "{{length(2.rows) == 0 || length(3.rows) == 0}}"
+          ]
         }
       ]
     },

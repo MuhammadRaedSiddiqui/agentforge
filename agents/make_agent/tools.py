@@ -192,14 +192,17 @@ def get_default_allowed_modules() -> list[str]:
     """
     return [
         "webhook:CustomWebHook",
+        "gateway:CustomWebHook",
         "http:ActionSendData",
-        "supabase:ActionSelectRows",
-        "supabase:ActionInsertRow",
-        "supabase:ActionUpdateRows",
-        "supabase:ActionDeleteRow",
+        "supabase:searchRows",
+        "supabase:createARow",
+        "supabase:upsertARecord",
+        "supabase:deleteRows",
+        "supabase:makeAnApiCall",
+        "supabase:getRowsCount",
         "json:ParseJSON",
         "json:TransformToJSON",
-        "builtin:BasicFunction",
+        "code:ExecuteCode",
         "builtin:BasicRouter",
         "builtin:BasicAggregator",
         "text:Replace",
@@ -246,10 +249,11 @@ def extract_supabase_operations(blueprint: dict[str, Any]) -> list[dict[str, Any
     flow = blueprint.get("flow", [])
 
     supabase_modules = [
-        "supabase:ActionSelectRows",
-        "supabase:ActionInsertRow",
-        "supabase:ActionUpdateRows",
-        "supabase:ActionDeleteRow",
+        "supabase:searchRows",
+        "supabase:createARow",
+        "supabase:upsertARecord",
+        "supabase:deleteRows",
+        "supabase:getRowsCount",
     ]
 
     for module in flow:
@@ -257,8 +261,8 @@ def extract_supabase_operations(blueprint: dict[str, Any]) -> list[dict[str, Any
             operations.append(
                 {
                     "module": module.get("module"),
-                    "table": module.get("parameters", {}).get("table"),
-                    "filters": module.get("parameters", {}).get("filter", []),
+                    "table": module.get("mapper", {}).get("table"),
+                    "filters": module.get("mapper", {}).get("search", {}).get("items", []),
                     "mapper": module.get("mapper", {}),
                 }
             )

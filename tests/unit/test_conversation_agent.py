@@ -3,10 +3,8 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 from orchestrator.conversation_agent import ConversationAgent
 from orchestrator.conversation_state import (
-    ConversationState,
     PartialIntakeData,
     SessionPhase,
 )
@@ -222,8 +220,8 @@ class TestVoiceSuggestions:
 
         response, state = agent.turn("Can you suggest some voices?", state)
 
-        assert "jennifer" in response
-        assert "rachel" in response
+        assert "Elliot" in response
+        assert "Savannah" in response
         assert state.phase == SessionPhase.GATHERING
 
 

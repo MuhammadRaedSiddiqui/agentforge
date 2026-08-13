@@ -37,13 +37,15 @@ class MakeValidator:
         "webhook:CustomWebHook",
         "gateway:CustomWebHook",
         "http:ActionSendData",
-        "supabase:ActionSelectRows",
-        "supabase:ActionInsertRow",
-        "supabase:ActionUpdateRows",
-        "supabase:ActionDeleteRow",
+        "supabase:searchRows",
+        "supabase:createARow",
+        "supabase:upsertARecord",
+        "supabase:deleteRows",
+        "supabase:makeAnApiCall",
+        "supabase:getRowsCount",
         "json:ParseJSON",
         "json:TransformToJSON",
-        "builtin:BasicFunction",
+        "code:ExecuteCode",
         "builtin:BasicRouter",
         "builtin:BasicAggregator",
         "text:Replace",
@@ -82,9 +84,10 @@ class MakeValidator:
                 errors.append(f"Missing required field: {field}")
 
         # Validate name
-        if "name" in blueprint:
-            if not isinstance(blueprint["name"], str) or len(blueprint["name"].strip()) == 0:
-                errors.append("Field 'name' must be a non-empty string")
+        if "name" in blueprint and (
+            not isinstance(blueprint["name"], str) or len(blueprint["name"].strip()) == 0
+        ):
+            errors.append("Field 'name' must be a non-empty string")
 
         # Validate flow
         if "flow" in blueprint:
@@ -136,6 +139,19 @@ class MakeValidator:
             module_errors = self._validate_module(module, i)
             errors.extend(module_errors)
 
+            # Recurse into router routes
+            routes = module.get("routes", [])
+            if isinstance(routes, list):
+                for route_idx, route in enumerate(routes):
+                    if not isinstance(route, dict):
+                        errors.append(f"Module at index {i} route {route_idx} must be an object")
+                        continue
+                    route_flow = route.get("flow", [])
+                    route_errors = self._validate_flow(route_flow)
+                    errors.extend(
+                        [f"Module at index {i} route {route_idx}: {e}" for e in route_errors]
+                    )
+
         return errors
 
     def _validate_module(self, module: dict[str, Any], index: int) -> list[str]:
@@ -178,11 +194,12 @@ class MakeValidator:
                 "HOOK_CANCELLATION_ID",
                 "HOOK_RESCHEDULING_ID",
             ]
-            if not any(allowed in placeholder for allowed in allowed_placeholders):
+            if not any(allowed in placeholder for allowed in allowed_placeholders) and not re.match(
+                r"^(?:now|\d+\.|(?:if|ifempty|length)\()", placeholder
+            ):
                 # Make expressions can be direct module references (``2.rows``)
                 # or functions around them (``length(2.rows)`` / ``if(...)``).
-                if not re.match(r"^(?:now|\d+\.|(?:if|ifempty|length)\()", placeholder):
-                    unresolved.add(placeholder)
+                unresolved.add(placeholder)
 
         if unresolved:
             errors.append(f"Unresolved placeholders found: {', '.join(sorted(unresolved))}")
@@ -210,11 +227,22 @@ class MakeValidator:
 
         flow = blueprint.get("flow", [])
 
-        for i, module in enumerate(flow):
-            module_name = module.get("module", "")
-            if module_name and module_name not in self.ALLOWED_MODULES:
-                errors.append(f"Module at index {i}: '{module_name}' not on allowlist")
+        def walk(modules: Any) -> None:
+            if not isinstance(modules, list):
+                return
+            for i, module in enumerate(modules):
+                if not isinstance(module, dict):
+                    continue
+                module_name = module.get("module", "")
+                if module_name and module_name not in self.ALLOWED_MODULES:
+                    errors.append(f"Module at index {i}: '{module_name}' not on allowlist")
+                routes = module.get("routes", [])
+                if isinstance(routes, list):
+                    for route in routes:
+                        if isinstance(route, dict):
+                            walk(route.get("flow", []))
 
+        walk(flow)
         return errors
 
     def _validate_hook_references(self, blueprint: dict[str, Any]) -> list[str]:
@@ -223,14 +251,25 @@ class MakeValidator:
 
         flow = blueprint.get("flow", [])
 
-        for i, module in enumerate(flow):
-            if module.get("module") in ("webhook:CustomWebHook", "gateway:CustomWebHook"):
-                hook = module.get("parameters", {}).get("hook")
-                if not hook:
-                    errors.append(f"Module at index {i}: webhook missing hook ID")
-                elif isinstance(hook, str) and len(hook.strip()) == 0:
-                    errors.append(f"Module at index {i}: webhook hook ID is empty")
+        def walk(modules: Any) -> None:
+            if not isinstance(modules, list):
+                return
+            for i, module in enumerate(modules):
+                if not isinstance(module, dict):
+                    continue
+                if module.get("module") in ("webhook:CustomWebHook", "gateway:CustomWebHook"):
+                    hook = module.get("parameters", {}).get("hook")
+                    if not hook:
+                        errors.append(f"Module at index {i}: webhook missing hook ID")
+                    elif isinstance(hook, str) and len(hook.strip()) == 0:
+                        errors.append(f"Module at index {i}: webhook hook ID is empty")
+                routes = module.get("routes", [])
+                if isinstance(routes, list):
+                    for route in routes:
+                        if isinstance(route, dict):
+                            walk(route.get("flow", []))
 
+        walk(flow)
         return errors
 
     def validate_supabase_operations(self, blueprint: dict[str, Any]) -> ValidationResult:
@@ -246,25 +285,51 @@ class MakeValidator:
         errors = []
         warnings = []
 
+        supabase_modules = {
+            "supabase:searchRows",
+            "supabase:createARow",
+            "supabase:upsertARecord",
+            "supabase:deleteRows",
+            "supabase:getRowsCount",
+        }
         flow = blueprint.get("flow", [])
 
-        for i, module in enumerate(flow):
-            module_name = module.get("module", "")
+        def walk(modules: Any) -> None:
+            if not isinstance(modules, list):
+                return
+            for i, module in enumerate(modules):
+                if not isinstance(module, dict):
+                    continue
+                module_name = module.get("module", "")
+                if module_name in supabase_modules:
+                    params = module.get("parameters", {})
+                    mapper = module.get("mapper", {})
 
-            if module_name.startswith("supabase:"):
-                # Check for required parameters
-                params = module.get("parameters", {})
+                    # Connection must be present (__IMTCONN__ placeholder or value)
+                    if "__IMTCONN__" not in params:
+                        errors.append(
+                            f"Module at index {i}: Supabase operation missing '__IMTCONN__' parameter"
+                        )
 
-                if "table" not in params:
-                    errors.append(
-                        f"Module at index {i}: Supabase operation missing 'table' parameter"
-                    )
+                    # Table goes in the mapper for native Supabase modules
+                    if module_name in ("supabase:searchRows", "supabase:createARow") and "table" not in mapper:
+                        errors.append(
+                            f"Module at index {i}: Supabase operation missing 'table' in mapper"
+                        )
 
-                # Check for organization_id filter in mapper
-                mapper = module.get("mapper", {})
-                if "organization_id" not in mapper and "organization_id" not in json.dumps(params):
-                    warnings.append(
-                        f"Module at index {i}: Supabase operation may lack organization_id isolation"
-                    )
+                    # Check for organization_id isolation in mapper
+                    if "organization_id" not in mapper and "organization_id" not in json.dumps(
+                        module
+                    ):
+                        warnings.append(
+                            f"Module at index {i}: Supabase operation may lack organization_id isolation"
+                        )
+                routes = module.get("routes", [])
+                if isinstance(routes, list):
+                    for route in routes:
+                        if isinstance(route, dict):
+                            walk(route.get("flow", []))
+
+        walk(flow)
 
         return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)

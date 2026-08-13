@@ -208,34 +208,13 @@ class MakeAdapter:
         if confirmed:
             url += "?confirmed=true"
 
-        try:
-            response = self._request(
-                method="POST",
-                url=url,
-                headers=self._get_headers(),
-                json_data=payload,
-                operation="create_scenario",
-            )
-        except PermanentError as e:
-            if "blueprint" in str(e).lower() or "IM007" in str(e) or "SC400" in str(e):
-                # Fallback: create with just the webhook trigger module
-                minimal_blueprint = {
-                    "name": blueprint.get("name", "scenario"),
-                    "flow": [
-                        {"id": 1, "module": "gateway:CustomWebHook", "version": 1, "mapper": {}}
-                    ],
-                    "metadata": blueprint.get("metadata", {"version": 1}),
-                }
-                payload["blueprint"] = json.dumps(minimal_blueprint)
-                response = self._request(
-                    method="POST",
-                    url=url,
-                    headers=self._get_headers(),
-                    json_data=payload,
-                    operation="create_scenario",
-                )
-            else:
-                raise
+        response = self._request(
+            method="POST",
+            url=url,
+            headers=self._get_headers(),
+            json_data=payload,
+            operation="create_scenario",
+        )
 
         # Response is wrapped in a "scenario" key
         scenario = response.get("scenario")
@@ -403,7 +382,11 @@ class MakeAdapter:
         self, scenario_id: int, blueprint: dict[str, Any], confirmed: bool = False
     ) -> AdapterReceipt:
         """
-        Update a scenario's blueprint via PUT.
+        Update a scenario's blueprint via PATCH /scenarios/{scenarioId}.
+
+        Make does not expose a PUT /scenarios/{scenarioId}/blueprint endpoint;
+        blueprint updates are applied through the scenario PATCH endpoint with
+        the blueprint serialized as a string (see tool-contracts.yaml).
 
         Args:
             scenario_id: Make scenario ID
@@ -425,14 +408,14 @@ class MakeAdapter:
             "designer": {"orphans": []},
         }
 
-        url = f"{self.base_url}/scenarios/{scenario_id}/blueprint"
+        url = f"{self.base_url}/scenarios/{scenario_id}"
         if confirmed:
             url += "?confirmed=true"
 
         payload = {"blueprint": json.dumps(blueprint)}
 
         response = self._request(
-            method="PUT",
+            method="PATCH",
             url=url,
             headers=self._get_headers(),
             json_data=payload,

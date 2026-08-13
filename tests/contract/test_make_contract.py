@@ -133,6 +133,60 @@ class TestMakeScenarioOperations:
             with pytest.raises(ValidationError):
                 make_adapter.create_scenario(blueprint, {"type": "indefinitely"})
 
+    def test_create_scenario_does_not_silently_degrade_on_blueprint_error(
+        self, make_adapter: MakeAdapter, mock_blueprint: dict
+    ) -> None:
+        """Test blueprint creation failures propagate instead of silently
+        degrading to a single-module webhook stub.
+
+        Regression: the adapter used to retry with a minimal one-module
+        blueprint on IM007/SC400 errors, which produced scenarios with only a
+        webhook module while the orchestrator reported success.
+        """
+        from shared.errors import PermanentError
+
+        with patch("requests.Session.request") as mock_request:
+            mock_response = MagicMock()
+            mock_response.status_code = 400
+            mock_response.text = "IM007 Module not found 'supabase:searchRows' version '1'"
+            mock_response.headers = {}
+            mock_request.return_value = mock_response
+
+            with pytest.raises(PermanentError):
+                make_adapter.create_scenario(mock_blueprint, {"type": "immediately"})
+
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            assert call_args[1]["method"] == "POST"
+
+    def test_update_scenario_blueprint_uses_patch(self, make_adapter: MakeAdapter) -> None:
+        """Test blueprint update uses PATCH /scenarios/{id} with blueprint as string."""
+        blueprint = {
+            "name": "Test",
+            "flow": [{"id": 1, "module": "gateway:CustomWebHook", "version": 1, "mapper": {}}],
+            "metadata": {"version": 1},
+        }
+
+        with patch("requests.Session.request") as mock_request:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"scenario": {"id": 123, "name": "Test"}}
+            mock_response.headers = {}
+            mock_request.return_value = mock_response
+
+            receipt = make_adapter.update_scenario_blueprint(123, blueprint, confirmed=True)
+
+            assert receipt.operation == "update_scenario_blueprint"
+            assert receipt.remote_id == "123"
+            call_args = mock_request.call_args
+            assert call_args[1]["method"] == "PATCH"
+            assert "/scenarios/123" in call_args[1]["url"]
+            assert "/blueprint" not in call_args[1]["url"]
+            import json
+
+            payload_blueprint = json.loads(call_args[1]["json"]["blueprint"])
+            assert payload_blueprint["name"] == "Test"
+
     def test_get_scenario_success(
         self, make_adapter: MakeAdapter, mock_scenario_response: dict
     ) -> None:
@@ -182,7 +236,7 @@ class TestMakeScenarioOperations:
             mock_response.headers = {}
             mock_request.return_value = mock_response
 
-            receipt = make_adapter.list_scenarios(is_active=True)
+            make_adapter.list_scenarios(is_active=True)
 
             # Verify query parameters included filter
             call_args = mock_request.call_args

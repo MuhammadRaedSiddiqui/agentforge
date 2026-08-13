@@ -77,37 +77,15 @@
     },
     {
       "id": 2,
-      "module": "builtin:BasicFunction",
-      "version": 1,
-      "parameters": {},
-      "mapper": {
-        "code": "return [{ appointment_id: 'APT-' + Math.random().toString(36).substr(2, 9).toUpperCase() }];"
-      },
-      "metadata": {
-        "designer": {
-          "x": 300,
-          "y": 0
-        },
-        "parameters": [
-          {
-            "name": "code",
-            "type": "text",
-            "label": "Code"
-          }
-        ]
-      }
-    },
-    {
-      "id": 3,
-      "module": "supabase:ActionInsertRow",
+      "module": "supabase:createARow",
       "version": 1,
       "parameters": {
-        "connection": "{{supabase_connection_id}}",
-        "table": "appointments"
+        "__IMTCONN__": "{{supabase_connection_id}}"
       },
       "mapper": {
+        "table": "appointments",
         "organization_id": "{{organization_id}}",
-        "appointment_id": "{{2.appointment_id}}",
+        "appointment_id": "APT-{{formatDate(now; \"x\")}}",
         "date": "{{1.date}}",
         "time": "{{1.time}}",
         "service_type": "{{1.service_type}}",
@@ -120,6 +98,32 @@
       },
       "metadata": {
         "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "supabase:makeAnApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "{{supabase_connection_id}}"
+      },
+      "mapper": {
+        "url": "/rest/v1/availability_slots?organization_id=eq.{{organization_id}}&date=eq.{{1.date}}&time_slot=eq.{{1.time}}",
+        "method": "PATCH",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "body": "{\"is_available\": false, \"appointment_id\": \"{{2.appointment_id}}\"}"
+      },
+      "metadata": {
+        "designer": {
           "x": 600,
           "y": 0
         }
@@ -127,42 +131,6 @@
     },
     {
       "id": 4,
-      "module": "supabase:ActionUpdateRows",
-      "version": 1,
-      "parameters": {
-        "connection": "{{supabase_connection_id}}",
-        "table": "availability_slots",
-        "filter": [
-          {
-            "column": "organization_id",
-            "operator": "eq",
-            "value": "{{organization_id}}"
-          },
-          {
-            "column": "date",
-            "operator": "eq",
-            "value": "{{1.date}}"
-          },
-          {
-            "column": "time_slot",
-            "operator": "eq",
-            "value": "{{1.time}}"
-          }
-        ]
-      },
-      "mapper": {
-        "is_available": "false",
-        "appointment_id": "{{2.appointment_id}}"
-      },
-      "metadata": {
-        "designer": {
-          "x": 900,
-          "y": 0
-        }
-      }
-    },
-    {
-      "id": 5,
       "module": "json:TransformToJSON",
       "version": 1,
       "parameters": {
@@ -179,13 +147,13 @@
       },
       "metadata": {
         "designer": {
-          "x": 1200,
+          "x": 900,
           "y": 0
         }
       }
     },
     {
-      "id": 6,
+      "id": 5,
       "module": "http:ActionSendData",
       "version": 3,
       "parameters": {
@@ -205,11 +173,11 @@
           }
         ],
         "bodyType": "raw",
-        "body": "{{5.json}}"
+        "body": "{{4.json}}"
       },
       "metadata": {
         "designer": {
-          "x": 1500,
+          "x": 1200,
           "y": 0
         }
       }
@@ -220,7 +188,7 @@
     "scenario": "{{organization_id}}_booking",
     "organization_id": "{{organization_id}}",
     "capability": "booking",
-    "template_version": "1.0.0",
+    "template_version": "1.1.0",
     "designer": {
       "orphans": []
     }
