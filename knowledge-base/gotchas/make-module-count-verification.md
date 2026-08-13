@@ -24,7 +24,7 @@ Each capability scenario has a known module count:
 | Capability | Expected Modules | Description |
 |------------|------------------|-------------|
 | **availability** | 4 | Webhook trigger + availability check + response formatter + webhook response |
-| **booking** | 6 | Webhook trigger + validation + database insert + confirmation + error handler + response |
+| **booking** | 5 | Webhook trigger + database insert (createARow with generated appointment_id) + availability update + response formatter + webhook response |
 | **cancellation** | 8 | Webhook trigger + lookup + router (found/not found) + database update + notification + 2 error handlers + response |
 | **rescheduling** | 10 | Webhook trigger + validation + lookup + router + availability check + update + conflict handler + notification + error handler + response |
 
@@ -36,7 +36,7 @@ Each capability scenario has a known module count:
    
    EXPECTED_MODULE_COUNTS = {
        "availability": 4,
-       "booking": 6,
+       "booking": 5,
        "cancellation": 8,
        "rescheduling": 10,
    }

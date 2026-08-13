@@ -203,6 +203,6 @@ class TestMakeScenarioDeployer:
 
     def test_expected_module_counts(self):
         assert EXPECTED_MODULE_COUNTS["availability"] == 4
-        assert EXPECTED_MODULE_COUNTS["booking"] == 6
+        assert EXPECTED_MODULE_COUNTS["booking"] == 5
         assert EXPECTED_MODULE_COUNTS["cancellation"] == 8
         assert EXPECTED_MODULE_COUNTS["rescheduling"] == 10

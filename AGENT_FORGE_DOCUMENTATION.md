@@ -208,7 +208,7 @@ Each task is a `TaskObject` specifying:
 Each agent generates platform-specific configs from ground-truth templates:
 
 - **Vapi Agent**: Produces assistant JSON (model, voice, system prompt, first message) + tool configs
-- **Make Agent**: Produces 4 blueprint JSONs (availability: 4 modules, booking: 6, cancellation: 8, rescheduling: 10)
+- **Make Agent**: Produces 4 blueprint JSONs (availability: 4 modules, booking: 5, cancellation: 8, rescheduling: 10)
 - **Supabase Agent**: Produces SQL migration with RLS policies
 - **Node.js Agent**: Produces backend route handlers
 
@@ -228,7 +228,7 @@ The `MakeScenarioDeployer` implements a multi-step deployment strategy:
 3. **Inject hook ID** into the blueprint's webhook module
 4. **Inject connection ID** if provided
 5. **Create scenario** with full blueprint (fallback: create stub, then update with full blueprint via PUT)
-6. **Verify module count** — expected counts: availability=4, booking=6, cancellation=8, rescheduling=10
+6. **Verify module count** — expected counts: availability=4, booking=5, cancellation=8, rescheduling=10
 7. **Activate scenario**
 
 This ensures full multi-module scenarios are deployed, not single-module stubs.
@@ -268,7 +268,7 @@ Action 2: Create Vapi assistant
   ↓ receipt persisted (includes remote_resource_id)
 Action 3: Create Make hook + scenario (availability_check, 4 modules)
   ↓ receipt persisted
-Action 4: Create Make hook + scenario (booking, 6 modules)
+Action 4: Create Make hook + scenario (booking, 5 modules)
   ↓ receipt persisted
 Action 5: Create Make hook + scenario (cancellation, 8 modules)
   ↓ receipt persisted
@@ -596,7 +596,7 @@ The regression suite (`tests/regression/`) prevents breaking changes to:
   - Required fields (name, flow, metadata) present
   - Module structure (id, module, version, mapper in each)
   - First module is webhook trigger (gateway:CustomWebHook)
-  - Module count baselines: availability=4, booking=6, cancellation=4, rescheduling=5
+  - Module count baselines: availability=4, booking=5, cancellation=4, rescheduling=5
   - Webhook configuration present for parameterization
   - Metadata consistency (version, capability, template_version)
 
@@ -1021,7 +1021,7 @@ python scripts/embed_knowledge.py --verify
 - Unknown scheduling types default to `immediately`
 - Hook-first deployment: hooks created before scenarios via `MakeScenarioDeployer`
 - Fallback: if full blueprint rejected, create stub + update with full blueprint via PUT
-- Expected module counts: availability=4, booking=6, cancellation=4, rescheduling=5
+- Expected module counts: availability=4, booking=5, cancellation=4, rescheduling=5
 - Adapter methods: `create_scenario`, `get_scenario`, `list_scenarios`, `delete_scenario`, `get_scenario_blueprint`, `update_scenario_blueprint`, `activate_scenario`, `deactivate_scenario`, `create_hook`, `get_hook`, `list_hooks`, `delete_hook`, `verify_hook`
 
 ### Supabase

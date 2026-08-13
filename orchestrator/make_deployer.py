@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 EXPECTED_MODULE_COUNTS = {
     "availability": 4,
-    "booking": 6,
+    "booking": 5,
     "cancellation": 8,
     "rescheduling": 10,
 }

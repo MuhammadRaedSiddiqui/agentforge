@@ -133,7 +133,7 @@ for module in webhook_modules:
 
 When verifying scenario creation, check module counts match expected:
 - **availability**: 4 modules
-- **booking**: 6 modules
+- **booking**: 5 modules
 - **cancellation**: 8 modules
 - **rescheduling**: 10 modules
 

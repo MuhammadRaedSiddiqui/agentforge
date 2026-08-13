@@ -163,16 +163,16 @@ class TestBlueprintModuleCountRegression:
             f"Verify this change is intentional."
         )
 
-    def test_booking_has_6_modules(self) -> None:
-        """Booking blueprint must have exactly 6 modules."""
+    def test_booking_has_5_modules(self) -> None:
+        """Booking blueprint must have exactly 5 modules."""
         blueprint_path = Path("ground-truth/configs/make_blueprints/booking.json")
 
         with open(blueprint_path, encoding="utf-8") as f:
             blueprint = json.load(f)
 
-        assert len(blueprint["flow"]) == 6, (
+        assert len(blueprint["flow"]) == 5, (
             f"Booking blueprint module count changed. "
-            f"Expected 6, got {len(blueprint['flow'])}. "
+            f"Expected 5, got {len(blueprint['flow'])}. "
             f"Verify this change is intentional."
         )
 
