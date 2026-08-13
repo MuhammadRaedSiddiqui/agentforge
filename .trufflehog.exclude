@@ -1,0 +1,4 @@
+# TruffleHog exclude-paths (newline-separated regexes).
+# These are false positives from the Lob detector matching pytest method
+# names that look like Lob test keys. The files themselves contain no secrets.
+^tests/unit/test_deployment_lookup\.py$
