@@ -242,14 +242,18 @@ class VapiValidator:
                     check_dict_for_secrets(value, current_path)
                 elif isinstance(value, str):
                     key_lower = key.lower()
-                    if any(
-                        secret_key in key_lower
-                        for secret_key in ["key", "secret", "token", "password"]
+                    if (
+                        any(
+                            secret_key in key_lower
+                            for secret_key in ["key", "secret", "token", "password"]
+                        )
+                        and value
+                        and "{{" not in value
+                        and len(value) > 10
                     ):
-                        if value and "{{" not in value and len(value) > 10:
-                            errors.append(
-                                f"Potential secret in field '{current_path}': {value[:20]}..."
-                            )
+                        errors.append(
+                            f"Potential secret in field '{current_path}': {value[:20]}..."
+                        )
 
         check_dict_for_secrets(config)
 

@@ -236,7 +236,7 @@ class TestMakeScenarioOperations:
             mock_response.headers = {}
             mock_request.return_value = mock_response
 
-            receipt = make_adapter.list_scenarios(is_active=True)
+            make_adapter.list_scenarios(is_active=True)
 
             # Verify query parameters included filter
             call_args = mock_request.call_args

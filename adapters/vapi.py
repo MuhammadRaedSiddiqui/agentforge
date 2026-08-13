@@ -108,11 +108,11 @@ class VapiAdapter:
             return result
 
         except requests.Timeout as e:
-            raise TransientError(f"Request timeout: {e}")
+            raise TransientError(f"Request timeout: {e}") from e
         except requests.ConnectionError as e:
-            raise TransientError(f"Connection error: {e}")
+            raise TransientError(f"Connection error: {e}") from e
         except requests.RequestException as e:
-            raise PermanentError(f"Request failed: {e}")
+            raise PermanentError(f"Request failed: {e}") from e
 
     def create_assistant(self, payload: dict[str, Any]) -> AdapterReceipt:
         """

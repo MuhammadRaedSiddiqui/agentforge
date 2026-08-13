@@ -84,9 +84,10 @@ class MakeValidator:
                 errors.append(f"Missing required field: {field}")
 
         # Validate name
-        if "name" in blueprint:
-            if not isinstance(blueprint["name"], str) or len(blueprint["name"].strip()) == 0:
-                errors.append("Field 'name' must be a non-empty string")
+        if "name" in blueprint and (
+            not isinstance(blueprint["name"], str) or len(blueprint["name"].strip()) == 0
+        ):
+            errors.append("Field 'name' must be a non-empty string")
 
         # Validate flow
         if "flow" in blueprint:
@@ -193,11 +194,12 @@ class MakeValidator:
                 "HOOK_CANCELLATION_ID",
                 "HOOK_RESCHEDULING_ID",
             ]
-            if not any(allowed in placeholder for allowed in allowed_placeholders):
+            if not any(allowed in placeholder for allowed in allowed_placeholders) and not re.match(
+                r"^(?:now|\d+\.|(?:if|ifempty|length)\()", placeholder
+            ):
                 # Make expressions can be direct module references (``2.rows``)
                 # or functions around them (``length(2.rows)`` / ``if(...)``).
-                if not re.match(r"^(?:now|\d+\.|(?:if|ifempty|length)\()", placeholder):
-                    unresolved.add(placeholder)
+                unresolved.add(placeholder)
 
         if unresolved:
             errors.append(f"Unresolved placeholders found: {', '.join(sorted(unresolved))}")

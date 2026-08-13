@@ -1,7 +1,5 @@
 from orchestrator.conversation_state import PartialIntakeData
-
 from shared.vapi_voices import DEFAULT_VOICE_ID, VAPI_VOICES
-
 
 FIELD_PRIORITY = [
     "capabilities",

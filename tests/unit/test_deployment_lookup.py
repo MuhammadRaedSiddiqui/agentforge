@@ -56,7 +56,7 @@ def _row(deployment_id: str, status: str, created_at: str) -> dict:
 
 @pytest.mark.unit
 class TestDeploymentLookupLatest:
-    def test_latest_deployment_picks_most_recent(self) -> None:
+    def test_latest_picks_newest(self) -> None:
         """Should return the newest deployment, not the oldest."""
         rows = [
             _row("old-aborted", "aborted", "2026-08-10T07:01:00+00:00"),
