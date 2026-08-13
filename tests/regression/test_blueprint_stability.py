@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-
 pytestmark = pytest.mark.regression
 
 
@@ -324,3 +323,76 @@ class TestBlueprintNamingRegression:
         assert len(name) > 0, (
             f"Blueprint {capability}.json name cannot be empty"
         )
+
+
+class TestBlueprintRouterSchemaRegression:
+    """
+    REGRESSION: Router routes must use Make-native filter schema.
+
+    Make's API rejects a ``condition`` property on route objects with
+    SC400 "should NOT have additional properties, additionalProperty:
+    'condition'". Filters belong on the first module inside a route's flow,
+    and the fallback route is marked via ``parameters.else``.
+    """
+
+    @pytest.mark.parametrize(
+        "capability",
+        ["cancellation", "rescheduling"],
+    )
+    def test_no_condition_key_on_router_routes(self, capability: str) -> None:
+        """Route objects must not carry a 'condition' key."""
+        blueprint_path = Path(f"ground-truth/configs/make_blueprints/{capability}.json")
+
+        with open(blueprint_path, encoding="utf-8") as f:
+            blueprint = json.load(f)
+
+        for module in blueprint["flow"]:
+            for route in module.get("routes", []):
+                assert "condition" not in route, (
+                    f"Blueprint {capability}.json route must not contain 'condition'. "
+                    f"Make rejects it with SC400. Use 'filter' on the first module "
+                    f"of the route flow instead."
+                )
+
+    @pytest.mark.parametrize(
+        "capability",
+        ["cancellation", "rescheduling"],
+    )
+    def test_router_marks_else_route(self, capability: str) -> None:
+        """Routers must mark the fallback route via parameters.else."""
+        blueprint_path = Path(f"ground-truth/configs/make_blueprints/{capability}.json")
+
+        with open(blueprint_path, encoding="utf-8") as f:
+            blueprint = json.load(f)
+
+        for module in blueprint["flow"]:
+            if module.get("module") == "builtin:BasicRouter":
+                assert "else" in (module.get("parameters") or {}), (
+                    f"Blueprint {capability}.json router must set parameters.else "
+                    f"to mark its fallback route."
+                )
+
+    @pytest.mark.parametrize(
+        "capability",
+        ["cancellation", "rescheduling"],
+    )
+    def test_route_filters_on_first_module(self, capability: str) -> None:
+        """Route filters must live on the first module of non-else route flows."""
+        blueprint_path = Path(f"ground-truth/configs/make_blueprints/{capability}.json")
+
+        with open(blueprint_path, encoding="utf-8") as f:
+            blueprint = json.load(f)
+
+        for module in blueprint["flow"]:
+            if module.get("module") != "builtin:BasicRouter":
+                continue
+            else_index = (module.get("parameters") or {}).get("else")
+            for idx, route in enumerate(module.get("routes", [])):
+                if idx == else_index:
+                    continue
+                first_module = route.get("flow", [{}])[0]
+                assert "filter" in first_module, (
+                    f"Blueprint {capability}.json route {idx} must define its filter "
+                    f"on the first module of the route flow. The Make API rejects "
+                    f"route-level condition/filter properties."
+                )

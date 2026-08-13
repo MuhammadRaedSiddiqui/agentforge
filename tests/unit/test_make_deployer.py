@@ -37,8 +37,11 @@ def mock_adapter():
         status="success",
         response_data={
             "response": {
-                "flow": [{"id": i, "module": "test"} for i in range(1, 5)]
-            }
+                "blueprint": {
+                    "flow": [{"id": i, "module": "test"} for i in range(1, 5)]
+                }
+            },
+            "code": 200,
         },
         idempotency_key=None,
         can_retry=True,
@@ -70,7 +73,7 @@ def availability_blueprint(tmp_path):
         "name": "Test - Availability",
         "flow": [
             {"id": 1, "module": "gateway:CustomWebHook", "version": 1, "parameters": {"hook": "{{availability_hook_id}}"}, "mapper": {}},
-            {"id": 2, "module": "supabase:ActionSelectRows", "version": 1, "parameters": {"connection": "{{supabase_connection_id}}", "table": "availability_slots"}, "mapper": {}},
+            {"id": 2, "module": "supabase:searchRows", "version": 1, "parameters": {"__IMTCONN__": "{{supabase_connection_id}}"}, "mapper": {"table": "availability_slots"}},
             {"id": 3, "module": "json:TransformToJSON", "version": 1, "parameters": {}, "mapper": {}},
             {"id": 4, "module": "http:ActionSendData", "version": 3, "parameters": {}, "mapper": {}},
         ],
@@ -93,7 +96,7 @@ class TestMakeScenarioDeployer:
 
         mock_adapter.create_hook.assert_called_once_with(
             name="test-hook",
-            type_name="web",
+            type_name="gateway-webhook",
             method=True,
             headers=True,
             stringify=True,
@@ -110,7 +113,7 @@ class TestMakeScenarioDeployer:
         call_args = mock_adapter.create_scenario.call_args
         blueprint_arg = call_args[0][0]
         webhook_module = blueprint_arg["flow"][0]
-        assert webhook_module["parameters"]["hook"] == "99001"
+        assert webhook_module["parameters"]["hook"] == 99001
 
     def test_deploy_injects_connection_id(self, mock_adapter, availability_blueprint):
         deployer = MakeScenarioDeployer(mock_adapter)
@@ -123,7 +126,7 @@ class TestMakeScenarioDeployer:
         call_args = mock_adapter.create_scenario.call_args
         blueprint_arg = call_args[0][0]
         supabase_module = blueprint_arg["flow"][1]
-        assert supabase_module["parameters"]["connection"] == "12345"
+        assert supabase_module["parameters"]["__IMTCONN__"] == 12345
 
     def test_deploy_activates_scenario(self, mock_adapter, availability_blueprint):
         deployer = MakeScenarioDeployer(mock_adapter)
@@ -144,6 +147,26 @@ class TestMakeScenarioDeployer:
 
         mock_adapter.get_scenario_blueprint.assert_called_once_with(55001)
         assert result["module_count"] == 4
+        assert result["module_count"] == EXPECTED_MODULE_COUNTS["availability"]
+
+    def test_module_count_includes_nested_router_routes(self):
+        """Count all modules including nested router route flows."""
+        from orchestrator.make_deployer import MakeScenarioDeployer
+
+        flow = [
+            {"id": 1, "module": "gateway:CustomWebHook"},
+            {"id": 2, "module": "supabase:searchRows"},
+            {
+                "id": 3,
+                "module": "builtin:BasicRouter",
+                "routes": [
+                    {"flow": [{"id": 4}, {"id": 5}]},
+                    {"flow": [{"id": 6}]},
+                ],
+            },
+            {"id": 7, "module": "http:ActionSendData"},
+        ]
+        assert MakeScenarioDeployer._count_modules(flow) == 7
 
     def test_deploy_fallback_on_creation_failure(self, mock_adapter, availability_blueprint):
         from shared.errors import PermanentError

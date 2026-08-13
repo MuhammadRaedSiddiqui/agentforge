@@ -77,7 +77,7 @@
     },
     {
       "id": 2,
-      "module": "builtin:BasicFunction",
+      "module": "code:ExecuteCode",
       "version": 1,
       "parameters": {},
       "mapper": {
@@ -99,13 +99,13 @@
     },
     {
       "id": 3,
-      "module": "supabase:ActionInsertRow",
+      "module": "supabase:createARow",
       "version": 1,
       "parameters": {
-        "connection": "{{supabase_connection_id}}",
-        "table": "appointments"
+        "__IMTCONN__": "{{supabase_connection_id}}"
       },
       "mapper": {
+        "table": "appointments",
         "organization_id": "{{organization_id}}",
         "appointment_id": "{{2.appointment_id}}",
         "date": "{{1.date}}",
@@ -127,32 +127,22 @@
     },
     {
       "id": 4,
-      "module": "supabase:ActionUpdateRows",
+      "module": "supabase:makeAnApiCall",
       "version": 1,
       "parameters": {
-        "connection": "{{supabase_connection_id}}",
-        "table": "availability_slots",
-        "filter": [
-          {
-            "column": "organization_id",
-            "operator": "eq",
-            "value": "{{organization_id}}"
-          },
-          {
-            "column": "date",
-            "operator": "eq",
-            "value": "{{1.date}}"
-          },
-          {
-            "column": "time_slot",
-            "operator": "eq",
-            "value": "{{1.time}}"
-          }
-        ]
+        "__IMTCONN__": "{{supabase_connection_id}}"
       },
       "mapper": {
-        "is_available": "false",
-        "appointment_id": "{{2.appointment_id}}"
+        "url": "/rest/v1/availability_slots?organization_id=eq.{{organization_id}}&date=eq.{{1.date}}&time_slot=eq.{{1.time}}",
+        "method": "PATCH",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "body": "{\"is_available\": false, \"appointment_id\": \"{{2.appointment_id}}\"}"
       },
       "metadata": {
         "designer": {

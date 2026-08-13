@@ -61,7 +61,7 @@ class MakeScenarioDeployer:
         # Step 1: Create hook
         hook_receipt = self.adapter.create_hook(
             name=hook_name or f"hook-{capability}",
-            type_name="web",
+            type_name="gateway-webhook",
             method=True,
             headers=True,
             stringify=True,
@@ -91,7 +91,7 @@ class MakeScenarioDeployer:
             minimal = {
                 "name": blueprint.get("name", f"scenario-{capability}"),
                 "flow": [
-                    {"id": 1, "module": "gateway:CustomWebHook", "version": 1, "parameters": {"hook": hook_id}, "mapper": {}}
+                    {"id": 1, "module": "gateway:CustomWebHook", "version": 1, "parameters": {"hook": int(hook_id)}, "mapper": {}}
                 ],
                 "metadata": {"instant": True, "version": 1, "designer": {"orphans": []}},
             }
@@ -110,14 +110,15 @@ class MakeScenarioDeployer:
             bp_receipt = self.adapter.get_scenario_blueprint(scenario_id)
             response = bp_receipt.response_data or {}
             bp_response = response.get("response", response)
-            flow = bp_response.get("flow", [])
-            result["module_count"] = len(flow)
+            blueprint = bp_response.get("blueprint", bp_response)
+            flow = blueprint.get("flow", [])
+            result["module_count"] = self._count_modules(flow)
 
             expected = EXPECTED_MODULE_COUNTS.get(capability, 0)
-            if expected and len(flow) != expected:
+            if expected and result["module_count"] != expected:
                 logger.warning(
                     f"Module count mismatch for {capability}: "
-                    f"expected {expected}, got {len(flow)}"
+                    f"expected {expected}, got {result['module_count']}"
                 )
         except Exception as verify_err:
             logger.warning(f"Could not verify blueprint for {capability}: {verify_err}")
@@ -142,25 +143,69 @@ class MakeScenarioDeployer:
     def _inject_hook_id(
         self, blueprint: dict[str, Any], capability: str, hook_id: str
     ) -> dict[str, Any]:
-        """Replace hook placeholders with real hook ID."""
+        """Replace hook placeholders with real hook ID.
+
+        Make requires the hook parameter to be an integer; passing the string
+        remote_id causes IM007 "Invalid value for type hook".
+        """
+        numeric_hook_id = int(hook_id)
         flow = blueprint.get("flow", [])
         for module in flow:
             if module.get("module") in ("webhook:CustomWebHook", "gateway:CustomWebHook"):
                 if "parameters" not in module:
                     module["parameters"] = {}
-                module["parameters"]["hook"] = hook_id
+                module["parameters"]["hook"] = numeric_hook_id
         return blueprint
 
     def _inject_connection_id(
         self, blueprint: dict[str, Any], connection_id: str
     ) -> dict[str, Any]:
-        """Replace connection placeholders with real connection ID."""
+        """Replace connection placeholders with real connection ID.
+
+        Native Make modules reference connections via the ``__IMTCONN__``
+        parameter (an integer). Also recurses into router routes.
+        """
+        numeric_connection_id = int(connection_id)
         flow = blueprint.get("flow", [])
-        for module in flow:
-            params = module.get("parameters", {})
-            conn = params.get("connection")
-            if isinstance(conn, str) and (
-                conn.startswith("{{") or conn == "{{supabase_connection_id}}"
-            ):
-                params["connection"] = connection_id
+
+        def inject(modules: list[dict[str, Any]]) -> None:
+            for module in modules:
+                params = module.get("parameters", {})
+                if "__IMTCONN__" in params:
+                    conn = params["__IMTCONN__"]
+                    if conn is None or (
+                        isinstance(conn, str)
+                        and (conn.startswith("{{") or conn == "{{supabase_connection_id}}")
+                    ):
+                        params["__IMTCONN__"] = numeric_connection_id
+                conn = params.get("connection")
+                if isinstance(conn, str) and (
+                    conn.startswith("{{") or conn == "{{supabase_connection_id}}"
+                ):
+                    params["connection"] = numeric_connection_id
+                routes = module.get("routes", [])
+                if isinstance(routes, list):
+                    for route in routes:
+                        if isinstance(route, dict):
+                            inject(route.get("flow", []))
+
+        inject(flow)
         return blueprint
+
+    @staticmethod
+    def _count_modules(flow: list[dict[str, Any]]) -> int:
+        """Count modules including nested router routes."""
+        count = 0
+
+        def walk(modules: list[dict[str, Any]]) -> None:
+            nonlocal count
+            for module in modules:
+                count += 1
+                routes = module.get("routes", [])
+                if isinstance(routes, list):
+                    for route in routes:
+                        if isinstance(route, dict):
+                            walk(route.get("flow", []))
+
+        walk(flow)
+        return count

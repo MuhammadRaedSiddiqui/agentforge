@@ -49,39 +49,34 @@
     },
     {
       "id": 2,
-      "module": "supabase:ActionSelectRows",
+      "module": "supabase:searchRows",
       "version": 1,
       "parameters": {
-        "connection": "{{supabase_connection_id}}",
-        "table": "availability_slots",
-        "select": "*",
-        "filter": [
-          {
-            "column": "organization_id",
-            "operator": "eq",
-            "value": "{{organization_id}}"
-          },
-          {
-            "column": "date",
-            "operator": "eq",
-            "value": "{{1.date}}"
-          },
-          {
-            "column": "is_available",
-            "operator": "eq",
-            "value": "true"
-          }
-        ],
-        "order": [
-          {
-            "column": "time_slot",
-            "ascending": true
-          }
-        ]
+        "__IMTCONN__": "{{supabase_connection_id}}"
       },
       "mapper": {
-        "date": "{{1.date}}",
-        "organization_id": "{{organization_id}}"
+        "table": "availability_slots",
+        "search": {
+          "logic": "and",
+          "items": [
+            {
+              "a": "organization_id",
+              "o": "text:eq.",
+              "b": "{{organization_id}}"
+            },
+            {
+              "a": "date",
+              "o": "text:eq.",
+              "b": "{{1.date}}"
+            },
+            {
+              "a": "is_available",
+              "o": "boolean:eq.",
+              "b": "true"
+            }
+          ]
+        },
+        "limit": 10
       },
       "metadata": {
         "designer": {
