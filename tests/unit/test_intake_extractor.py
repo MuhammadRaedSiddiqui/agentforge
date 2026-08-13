@@ -1,16 +1,16 @@
 """Unit tests for orchestrator/intake_extractor.py"""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 from orchestrator.conversation_state import PartialIntakeData
 from orchestrator.intake_extractor import (
     EXTRACT_FUNCTION,
+    _convert_messages,
     apply_correction,
     apply_extraction,
     extract_from_conversation,
-    _convert_messages,
+    fallback_extract,
 )
 
 
@@ -170,3 +170,101 @@ class TestExtractFromConversation:
         messages = [{"role": "user", "parts": ["test"]}]
         result = extract_from_conversation(messages, mock_model)
         assert result == {}
+
+
+class TestFallbackExtract:
+    """Deterministic regex fallback used when the model refuses tool calls."""
+
+    def test_extracts_all_fields_from_full_message(self) -> None:
+        messages = [
+            {
+                "role": "user",
+                "parts": [
+                    "I want to onboard a new client called Sunrise Dental Studio. "
+                    "The organization ID is sunrise_dental. The business phone number is "
+                    "+12025550189. We need: availability check, booking, cancellation with "
+                    "24-hour window, rescheduling, and human transfer to the front desk. "
+                    "Timezone America/New_York."
+                ],
+            }
+        ]
+        result = fallback_extract(messages)
+        assert result["org_id"] == "sunrise_dental"
+        assert result["business_name"] == "Sunrise Dental Studio"
+        assert result["phone_number"] == "+12025550189"
+        assert result["timezone"] == "America/New_York"
+        assert result["capabilities"] == [
+            "availability",
+            "booking",
+            "cancellation",
+            "rescheduling",
+            "human_transfer",
+        ]
+
+    def test_extracts_voice_from_known_list(self) -> None:
+        messages = [{"role": "user", "parts": ["Use the Elliot voice please"]}]
+        result = fallback_extract(messages)
+        assert result["voice_id"] == "Elliot"
+
+    def test_extracts_voice_case_insensitive(self) -> None:
+        messages = [{"role": "user", "parts": ["Use the savannah voice please"]}]
+        result = fallback_extract(messages)
+        assert result["voice_id"] == "Savannah"
+
+    def test_returns_empty_for_no_match(self) -> None:
+        messages = [{"role": "user", "parts": ["Hello there"]}]
+        assert fallback_extract(messages) == {}
+
+    def test_ignores_assistant_messages(self) -> None:
+        messages = [
+            {"role": "user", "parts": ["Set up a salon"]},
+            {"role": "model", "parts": ["What voice? +15551234567"]},
+        ]
+        result = fallback_extract(messages)
+        assert "phone_number" not in result
+
+    def test_used_when_model_returns_text_only(self) -> None:
+        mock_model = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].message.content = "Got it, onboarding now."
+        mock_model.provider = "meta"
+        mock_model.create_completion.return_value = mock_response
+
+        messages = [
+            {
+                "role": "user",
+                "parts": [
+                    "Client called Test Dental, org id test_dental, phone +13055551234, "
+                    "capabilities booking and cancellation."
+                ],
+            }
+        ]
+        result = extract_from_conversation(messages, mock_model)
+        assert result["org_id"] == "test_dental"
+        assert result["phone_number"] == "+13055551234"
+        assert result["capabilities"] == ["booking", "cancellation"]
+
+    def test_fallback_runs_for_all_providers_as_last_resort(self) -> None:
+        mock_model = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].message.content = "text"
+        mock_model.provider = "openai"
+        mock_model.create_completion.return_value = mock_response
+
+        messages = [
+            {
+                "role": "user",
+                "parts": [
+                    "Client called Test Dental, org id test_dental, phone +13055551234, "
+                    "capabilities booking."
+                ],
+            }
+        ]
+        result = extract_from_conversation(messages, mock_model)
+        assert result["org_id"] == "test_dental"
+        assert result["phone_number"] == "+13055551234"
+        assert result["capabilities"] == ["booking"]

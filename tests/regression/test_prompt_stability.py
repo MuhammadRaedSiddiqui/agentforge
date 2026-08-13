@@ -12,8 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from orchestrator.conversation_agent import ConversationAgent
-from orchestrator.conversation_state import ConversationState, PartialIntakeData, SessionPhase
-
+from orchestrator.conversation_state import PartialIntakeData, SessionPhase
 
 pytestmark = pytest.mark.regression
 

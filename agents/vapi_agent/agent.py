@@ -15,6 +15,7 @@ from orchestrator.template_registry import get_template_registry
 from shared.hashing import compute_content_hash
 from shared.result_object import ResultObject
 from shared.task_object import TaskObject
+from shared.vapi_voices import DEFAULT_VOICE_ID
 
 
 class VapiAgent:
@@ -76,7 +77,7 @@ class VapiAgent:
         context = {
             "organization_id": organization_id,
             "organization_display_name": organization_display_name,
-            "voice_id": intake.get("vapi", {}).get("voice_id", "default-voice"),
+            "voice_id": intake.get("vapi", {}).get("voice_id") or DEFAULT_VOICE_ID,
             "server_url": server_url,
             "server_url_secret": "{{WEBHOOK_SECRET}}",  # Placeholder for runtime secret
         }

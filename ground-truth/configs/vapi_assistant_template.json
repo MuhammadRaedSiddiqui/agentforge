@@ -7,10 +7,9 @@
     "maxTokens": 500
   },
   "voice": {
-    "provider": "11labs",
+    "provider": "vapi",
     "voiceId": "{{voice_id}}",
-    "stability": 0.5,
-    "similarityBoost": 0.75
+    "version": 2
   },
   "firstMessage": "Hello! I'm the {{organization_display_name}} assistant. How can I help you today?",
   "serverUrl": "{{server_url}}",

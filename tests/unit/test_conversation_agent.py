@@ -222,8 +222,8 @@ class TestVoiceSuggestions:
 
         response, state = agent.turn("Can you suggest some voices?", state)
 
-        assert "jennifer" in response
-        assert "rachel" in response
+        assert "Elliot" in response
+        assert "Savannah" in response
         assert state.phase == SessionPhase.GATHERING
 
 

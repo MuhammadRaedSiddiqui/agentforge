@@ -16,7 +16,7 @@ class TestNextQuestion:
             org_id="test_org",
             business_name="Test Org",
             phone_number="+13055551234",
-            voice_id="jennifer",
+            voice_id="Elliot",
             capabilities=["booking"],
         )
         assert next_question(partial) is None
@@ -57,7 +57,7 @@ class TestNextQuestion:
         partial = PartialIntakeData(
             business_name="Test Biz",
             phone_number="+13055551234",
-            voice_id="jennifer",
+            voice_id="Elliot",
             capabilities=["booking"],
         )
         result = next_question(partial)
@@ -67,7 +67,7 @@ class TestNextQuestion:
         partial = PartialIntakeData(
             org_id="test",
             phone_number="+13055551234",
-            voice_id="jennifer",
+            voice_id="Elliot",
             capabilities=["booking"],
         )
         result = next_question(partial)
@@ -94,7 +94,7 @@ class TestHandleVoiceSuggestionRequest:
         assert handle_voice_suggestion_request("I want booking capabilities") is False
 
     def test_does_not_detect_voice_id(self) -> None:
-        assert handle_voice_suggestion_request("Use jennifer") is False
+        assert handle_voice_suggestion_request("Use Elliot") is False
 
     def test_case_insensitive(self) -> None:
         assert handle_voice_suggestion_request("SUGGEST some voices") is True
@@ -102,7 +102,7 @@ class TestHandleVoiceSuggestionRequest:
 
 class TestVoiceSuggestions:
     def test_contains_common_voices(self) -> None:
-        assert "jennifer" in VOICE_SUGGESTIONS
-        assert "josh" in VOICE_SUGGESTIONS
-        assert "rachel" in VOICE_SUGGESTIONS
-        assert "adam" in VOICE_SUGGESTIONS
+        assert "Elliot" in VOICE_SUGGESTIONS
+        assert "Savannah" in VOICE_SUGGESTIONS
+        assert "Clara" in VOICE_SUGGESTIONS
+        assert "Kai" in VOICE_SUGGESTIONS

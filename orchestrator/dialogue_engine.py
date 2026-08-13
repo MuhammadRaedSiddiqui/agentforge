@@ -1,5 +1,7 @@
 from orchestrator.conversation_state import PartialIntakeData
 
+from shared.vapi_voices import DEFAULT_VOICE_ID, VAPI_VOICES
+
 
 FIELD_PRIORITY = [
     "capabilities",
@@ -32,13 +34,14 @@ FIELD_QUESTIONS: dict[str, str] = {
     ),
 }
 
-VOICE_SUGGESTIONS = """Common Vapi voice options:
-  jennifer     — Friendly, warm female voice (recommended for salons)
-  josh         — Professional male voice
-  rachel       — Calm, clear female voice
-  adam         — Neutral male voice
+VOICE_SUGGESTIONS = "Common Vapi voice options (pick one of these IDs):\n" + "\n".join(
+    f"  {voice_id}     — {description}" for voice_id, description in VAPI_VOICES.items()
+) + "\n\nShare the voice ID directly once you've decided."
 
-Share the voice ID directly once you've decided."""
+
+def default_voice_id() -> str:
+    """Return the default voice used when the user does not pick one."""
+    return DEFAULT_VOICE_ID
 
 
 def next_question(partial: PartialIntakeData) -> str | None:

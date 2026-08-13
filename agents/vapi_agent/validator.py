@@ -139,6 +139,19 @@ class VapiValidator:
         if "voiceId" not in voice:
             errors.append("Voice missing required field 'voiceId'")
 
+        # Vapi built-in voices must use provider "vapi" with a known voice ID.
+        # A third-party provider (e.g. 11labs) without matching credentials
+        # causes "Couldn't Find <provider> Voice" at call time.
+        if voice.get("provider") == "vapi":
+            from shared.vapi_voices import is_valid_vapi_voice
+
+            voice_id = voice.get("voiceId")
+            if not voice_id or not is_valid_vapi_voice(voice_id):
+                errors.append(
+                    f"Voice '{voice_id}' is not a valid Vapi built-in voice ID. "
+                    f"Use one of the IDs listed in shared.vapi_voices."
+                )
+
         return errors
 
     def _validate_server_url(self, url: str) -> list[str]:

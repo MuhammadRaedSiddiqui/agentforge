@@ -429,15 +429,17 @@ class VapiAdapter:
         )
 
     def list_voices(self) -> AdapterReceipt:
-        """List all available voices from Vapi."""
-        url = f"{self.base_url}/voice"
-        response = self._request(
-            method="GET",
-            url=url,
-            headers=self._get_headers(),
-            operation="list_voices",
-        )
-        voices = response if isinstance(response, list) else []
+        """List available Vapi built-in voices.
+
+        Vapi's API does not expose a live voice-listing endpoint, so the
+        canonical catalog from shared.vapi_voices is returned instead.
+        """
+        from shared.vapi_voices import VAPI_VOICES
+
+        voices = [
+            {"voiceId": voice_id, "name": voice_id, "description": description}
+            for voice_id, description in VAPI_VOICES.items()
+        ]
         return AdapterReceipt(
             platform="vapi",
             operation="list_voices",

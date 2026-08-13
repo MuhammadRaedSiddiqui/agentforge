@@ -1,3 +1,7 @@
+import argparse
+import sys
+
+
 def cmd_gotcha_review(args: argparse.Namespace) -> int:
     """
     Review and approve/reject gotcha proposals.
@@ -62,7 +66,7 @@ def cmd_gotcha_review(args: argparse.Namespace) -> int:
             proposal = proposals[proposal_num - 1]
 
             # Show proposal details
-            print(f"\nApproving proposal:")
+            print("\nApproving proposal:")
             print(f"  Platform: {proposal.get('platform', 'unknown').upper()}")
             print(f"  Symptom: {proposal.get('symptom', 'unknown')}")
             print(f"  Topic: {proposal.get('topic', 'unknown')}")
@@ -118,7 +122,7 @@ def cmd_gotcha_review(args: argparse.Namespace) -> int:
             proposal = proposals[proposal_num - 1]
 
             # Show proposal details
-            print(f"\nRejecting proposal:")
+            print("\nRejecting proposal:")
             print(f"  Platform: {proposal.get('platform', 'unknown').upper()}")
             print(f"  Symptom: {proposal.get('symptom', 'unknown')}")
 
