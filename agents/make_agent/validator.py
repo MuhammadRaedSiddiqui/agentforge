@@ -195,7 +195,7 @@ class MakeValidator:
                 "HOOK_RESCHEDULING_ID",
             ]
             if not any(allowed in placeholder for allowed in allowed_placeholders) and not re.match(
-                r"^(?:now|\d+\.|(?:if|ifempty|length)\()", placeholder
+                r"^(?:now|\d+\.|(?:if|ifempty|length|formatDate)\()", placeholder
             ):
                 # Make expressions can be direct module references (``2.rows``)
                 # or functions around them (``length(2.rows)`` / ``if(...)``).
@@ -312,7 +312,10 @@ class MakeValidator:
                         )
 
                     # Table goes in the mapper for native Supabase modules
-                    if module_name in ("supabase:searchRows", "supabase:createARow") and "table" not in mapper:
+                    if (
+                        module_name in ("supabase:searchRows", "supabase:createARow")
+                        and "table" not in mapper
+                    ):
                         errors.append(
                             f"Module at index {i}: Supabase operation missing 'table' in mapper"
                         )

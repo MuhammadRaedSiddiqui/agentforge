@@ -87,26 +87,53 @@ def _extract_tool_call(response: Any) -> dict[str, Any]:
 # that appear explicitly in the user's messages, so the conversation always
 # makes progress even if the model never emits a tool call.
 _CAPABILITY_PATTERNS: list[tuple[str, list[str]]] = [
-    ("availability", ["availability", "check open appointment slots", "open slots", "availability check"]),
-    ("booking", ["booking", "book appointments", "book new appointments", "take bookings", "appointment booking"]),
+    (
+        "availability",
+        ["availability", "check open appointment slots", "open slots", "availability check"],
+    ),
+    (
+        "booking",
+        [
+            "booking",
+            "book appointments",
+            "book new appointments",
+            "take bookings",
+            "appointment booking",
+        ],
+    ),
     ("cancellation", ["cancellation", "cancel appointments", "appointment cancellation"]),
     ("rescheduling", ["reschedul"]),
-    ("human_transfer", ["human transfer", "transfer to a human", "transfer calls", "speak to a person", "human agent", "front desk"]),
+    (
+        "human_transfer",
+        [
+            "human transfer",
+            "transfer to a human",
+            "transfer calls",
+            "speak to a person",
+            "human agent",
+            "front desk",
+        ],
+    ),
 ]
 
 _ORG_ID_PATTERNS = [
-    re.compile(r"(?:organization\s*id|org\s*id|org_id|organization_id)\s*(?:is|:|=)?\s*['\"]?([a-zA-Z0-9_]+)", re.IGNORECASE),
+    re.compile(
+        r"(?:organization\s*id|org\s*id|org_id|organization_id)\s*(?:is|:|=)?\s*['\"]?([a-zA-Z0-9_]+)",
+        re.IGNORECASE,
+    ),
 ]
 
 _BUSINESS_NAME_PATTERNS = [
     re.compile(r"(?:client|business|company)\s+(?:named|called)\s+(.+)", re.IGNORECASE),
-    re.compile(r"(?:business|company)\s+name\s+(?:is|:|=)?\s+(.+)", re.IGNORECASE),
+    re.compile(r"(?:business|company)\s+name\s*(?:is|:|=)?\s+(.+)", re.IGNORECASE),
 ]
 
 _PHONE_PATTERN = re.compile(r"\+[1-9]\d{1,14}")
 
 _TIMEZONE_PATTERNS = [
-    re.compile(r"\b(America/(?:New_York|Los_Angeles|Chicago|Denver|Phoenix|Toronto|Vancouver|Anchorage|Honolulu))\b"),
+    re.compile(
+        r"\b(America/(?:New_York|Los_Angeles|Chicago|Denver|Phoenix|Toronto|Vancouver|Anchorage|Honolulu))\b"
+    ),
     re.compile(r"\b(Europe/(?:London|Paris|Berlin))\b"),
     re.compile(r"\b(Asia/(?:Tokyo|Shanghai|Dubai))\b"),
     re.compile(r"\b(Australia/Sydney)\b"),
@@ -128,9 +155,7 @@ def fallback_extract(messages: list[dict[str, Any]]) -> dict[str, Any]:
     conversation never gets stuck re-asking for the same fields.
     """
     user_text = "\n".join(
-        str(msg.get("parts", [""])[0])
-        for msg in messages
-        if msg.get("role") == "user"
+        str(msg.get("parts", [""])[0]) for msg in messages if msg.get("role") == "user"
     )
     if not user_text:
         return {}
@@ -149,9 +174,88 @@ def fallback_extract(messages: list[dict[str, Any]]) -> dict[str, Any]:
         match = pattern.search(user_text)
         if match:
             name = _clean_candidate(match.group(1))
+            # Greedy (.+) captures trailing fields like "Client phone: +1..."
+            # Truncate at next field marker so only the name remains.
+            name = (
+                re.split(
+                    r"\b(?:Client phone|Transfer fallback|Voice|Timezone|Hours|Services|Booking|Capabilities|Organization ID|Phone number)\b",
+                    name,
+                    maxsplit=1,
+                    flags=re.IGNORECASE,
+                )[0]
+                .strip()
+                .rstrip(":-,")
+            )
             if len(name) >= 2:
                 extracted["business_name"] = name
                 break
+
+    # Bare-name fallback: if user replied with just a name like "Solara Dental"
+    # (no "business name is" prefix), treat a short, field-free last message
+    # as the business name when it's still missing.
+    if "business_name" not in extracted:
+        last_user = ""
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                last_user = str(msg.get("parts", [""])[0]).strip()
+                break
+        if last_user and 2 <= len(last_user) <= 60:
+            words = last_user.split()
+            # short name candidate: 1-4 words, no phone/voice/timezone/capability keywords,
+            # no field markers like ":" "=" and not a pure confirmation
+            field_markers = [
+                "phone",
+                "voice",
+                "timezone",
+                "capability",
+                "booking",
+                "availability",
+                "cancellation",
+                "reschedul",
+                "transfer",
+                "organization",
+                "org_id",
+                "org id",
+                ": ",
+                "=",
+                "@",
+                "+",
+            ]
+            lower_last = last_user.lower()
+            is_field_like = any(m in lower_last for m in field_markers)
+            is_phone = bool(_PHONE_PATTERN.search(last_user))
+            if (
+                not is_field_like
+                and not is_phone
+                and 2 <= len(words) <= 5
+                and lower_last
+                not in {
+                    "yes",
+                    "y",
+                    "no",
+                    "n",
+                    "ok",
+                    "okay",
+                    "hello",
+                    "hello there",
+                    "hi",
+                    "hey",
+                    "test",
+                    "testing",
+                }
+                and "hello" not in lower_last
+                and len(last_user) >= 3
+                and not any(
+                    kw in lower_last
+                    for kw in ["booking", "availability", "cancellation", "rescheduling", "human"]
+                )
+            ):
+                extracted["business_name"] = last_user
+                # also derive org_id if still missing
+                if "org_id" not in extracted:
+                    derived = re.sub(r"[^a-z0-9]+", "_", lower_last).strip("_")
+                    if derived and len(derived) >= 3:
+                        extracted["org_id"] = derived
 
     phone = _PHONE_PATTERN.search(user_text)
     if phone:
