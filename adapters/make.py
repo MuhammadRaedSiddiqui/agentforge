@@ -121,6 +121,11 @@ class MakeAdapter:
                 raise PermanentError(f"HTTP {response.status_code}: Not found")
             elif response.status_code == 409:
                 raise ConflictError(f"HTTP {response.status_code}: Conflict")
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After", "unknown")
+                raise TransientError(
+                    f"HTTP 429: Rate limited (Retry-After: {retry_after})"
+                )
             elif response.status_code >= 500:
                 raise TransientError(f"HTTP {response.status_code}: Server error")
             elif response.status_code >= 400:

@@ -1,0 +1,34 @@
+{
+  "organization_id": "solara_dental_final2",
+  "business_name": "Solara Dental Studio",
+  "phone_number": "+15555550247",
+  "voice_id": "Elliot",
+  "timezone": "America/Chicago",
+  "business_hours": {
+    "monday": [{"open": "08:00", "close": "18:00"}],
+    "tuesday": [{"open": "08:00", "close": "18:00"}],
+    "wednesday": [{"open": "08:00", "close": "18:00"}],
+    "thursday": [{"open": "08:00", "close": "18:00"}],
+    "friday": [{"open": "08:00", "close": "16:00"}],
+    "saturday": [{"open": "08:00", "close": "12:00"}],
+    "sunday": []
+  },
+  "services_offered": [
+    {"name": "Routine Cleaning", "duration_minutes": 45, "description": "Standard hygiene cleaning"},
+    {"name": "Whitening Consult", "duration_minutes": 30, "description": "Initial consult for whitening"},
+    {"name": "Filling", "duration_minutes": 60, "description": "Composite filling"},
+    {"name": "Emergency Visit", "duration_minutes": 30, "description": "Same-day triage"}
+  ],
+  "booking_calendar_id": "solara-calendar-austin-001",
+  "cancellation_window_hours": 24,
+  "rescheduling_policy": {"minimum_notice_hours": 12, "maximum_reschedules": 2, "allowed": true},
+  "transfer_destination": "+15555550248",
+  "enabled_capabilities": ["availability", "booking", "cancellation", "rescheduling", "human_transfer"],
+  "external_identifiers": {
+    "vapi_phone_number_id": "ca649cc0-5279-48ab-b1bd-a4dc7b3cdc4f",
+    "make_team_id": "2566984",
+    "supabase_project_ref": "staging-supabase-ref"
+  },
+  "hosting": {"webhook_base_url": "https://averon-ztfm.onrender.com"},
+  "server_source_path": "server.js"
+}
