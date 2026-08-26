@@ -89,19 +89,17 @@ class MakeScenarioDeployer:
             except Exception as e:
                 last_err = e
                 msg = str(e)
+                # Only retry transient errors (429/500); permanent errors like IM007 should fallback
+                from shared.errors import TransientError
+
+                is_transient = isinstance(e, TransientError) or "500" in msg or "Server error" in msg
                 is_rate_limited = "429" in msg or "Rate limited" in msg
-                is_transient = "500" in msg or "Server error" in msg or is_rate_limited
-                if attempt < 3 and (is_rate_limited or is_transient):
+                if is_transient and attempt < 3:
                     wait = (5 * (2**attempt)) if is_rate_limited else 1.5
                     logger.warning(
                         f"Full blueprint failed for {capability} (attempt {attempt + 1}/4): {e} — retrying in {wait}s"
                     )
                     time.sleep(wait)
-                    continue
-                if attempt < 3 and not is_rate_limited:
-                    # For non-rate-limit transient, still retry once
-                    logger.warning(f"Full blueprint failed for {capability}: {e} — retrying")
-                    time.sleep(1.5)
                     continue
                 break
 
