@@ -2,6 +2,8 @@ from orchestrator.conversation_state import PartialIntakeData
 from shared.vapi_voices import DEFAULT_VOICE_ID, VAPI_VOICES
 
 FIELD_PRIORITY = [
+    "business_name",
+    "org_id",
     "capabilities",
     "phone_number",
     "voice_id",
@@ -10,6 +12,11 @@ FIELD_PRIORITY = [
 ]
 
 FIELD_QUESTIONS: dict[str, str] = {
+    "business_name": "What is the business name for this client?",
+    "org_id": (
+        "What should the organization ID be? Use a short slug like "
+        "solara_dental — lowercase, underscores, no spaces."
+    ),
     "capabilities": (
         "What should the assistant be able to do? For example: take bookings, "
         "check availability, handle cancellations or rescheduling?"
@@ -27,14 +34,17 @@ FIELD_QUESTIONS: dict[str, str] = {
         "Central, or a city name works too."
     ),
     "business_hours": (
-        "What are their business hours? A rough answer like "
-        "'Mon-Sat 9am to 6pm' is fine."
+        "What are their business hours? A rough answer like 'Mon-Sat 9am to 6pm' is fine."
     ),
 }
 
-VOICE_SUGGESTIONS = "Common Vapi voice options (pick one of these IDs):\n" + "\n".join(
-    f"  {voice_id}     — {description}" for voice_id, description in VAPI_VOICES.items()
-) + "\n\nShare the voice ID directly once you've decided."
+VOICE_SUGGESTIONS = (
+    "Common Vapi voice options (pick one of these IDs):\n"
+    + "\n".join(
+        f"  {voice_id}     — {description}" for voice_id, description in VAPI_VOICES.items()
+    )
+    + "\n\nShare the voice ID directly once you've decided."
+)
 
 
 def default_voice_id() -> str:

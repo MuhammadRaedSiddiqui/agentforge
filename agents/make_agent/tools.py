@@ -104,12 +104,6 @@ def inject_hook_urls(
             hook_placeholder = f"{{{{HOOK_{capability.upper()}_ID}}}}"
             module["parameters"]["hook"] = hook_placeholder
 
-            if "metadata" not in module:
-                module["metadata"] = {}
-
-            module["metadata"]["capability"] = capability
-            module["metadata"]["organization_id"] = organization_id
-
     return blueprint
 
 
