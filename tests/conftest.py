@@ -17,6 +17,7 @@ the point of those suites.
 """
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -51,24 +52,46 @@ _STUBBED_ENV = {
     "SUPABASE_CLIENT_URL": "https://localhost.invalid",
     "SUPABASE_CLIENT_SERVICE_ROLE_KEY": "test-client-service-role-key",
     "SUPABASE_PROJECT_REF_STAGING": "test-project-ref",
+    # Internal operational store
+    "SUPABASE_INTERNAL_URL": "https://localhost.invalid",
+    "SUPABASE_INTERNAL_SERVICE_ROLE_KEY": "test-internal-service-role-key",
+    # Knowledge retrieval
+    "BRAVE_SEARCH_API_KEY": "test-brave-key",
     # Environment guard — never let a test think it is in production
     "AGENT_FORGE_ENV": "staging",
 }
 
+# Required by load_config() but pointing at paths rather than services. Set to a
+# per-test temp directory so a test that actually writes cannot land in the repo.
+_STUBBED_PATH_ENV = ("CHROMA_PERSIST_DIR", "SERVER_SOURCE_PATH")
+
 
 @pytest.fixture(autouse=True)
 def stub_external_credentials(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Replace real credentials with sentinels outside integration/staging tests."""
+    """Replace real credentials with sentinels outside integration/staging tests.
+
+    `_STUBBED_ENV` must cover every variable `load_config()` lists as required
+    (cli/config.py). Masking is not enough: a developer's .env supplies the real
+    ones, so an omission here passes locally and fails only on a clean checkout
+    where the variable never existed to be overwritten. That is exactly how
+    SUPABASE_INTERNAL_URL, BRAVE_SEARCH_API_KEY and the two path variables
+    reached CI unset.
+    """
     if request.node.get_closest_marker("integration") or request.node.get_closest_marker("staging"):
         return
 
     for key, value in _STUBBED_ENV.items():
         monkeypatch.setenv(key, value)
 
-    # Internal operational store: names vary by deployment, so clear anything
-    # that looks like a Supabase credential rather than enumerating variants.
+    for key in _STUBBED_PATH_ENV:
+        monkeypatch.setenv(key, str(tmp_path / key.lower()))
+
+    monkeypatch.setenv("SERVER_TEST_COMMAND", "true")
+
+    # Credential names vary by deployment, so clear anything that looks like a
+    # Supabase credential rather than enumerating every variant.
     for key in list(os.environ):
         if key.startswith("SUPABASE_") and key not in _STUBBED_ENV:
             monkeypatch.setenv(key, "test-internal-placeholder")

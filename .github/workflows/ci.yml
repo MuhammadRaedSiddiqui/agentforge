@@ -17,7 +17,12 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install ruff>=0.1.0
+      # Quoted, and pinned exactly. Unquoted, `>` is a shell redirect: the old
+      # `pip install ruff>=0.1.0` wrote stdout to a file named `=0.1.0` and
+      # installed whatever ruff was newest. Formatting output is version
+      # specific, so a blocking format gate against a floating formatter fails
+      # the moment upstream changes its mind. Bump this deliberately.
+      - run: pip install "ruff==0.14.10"
       # The tree is clean, so both events lint everything. The old
       # changed-files-only path on PRs existed to avoid failing on the 114
       # pre-existing errors; that reason is gone, and linting only the diff
