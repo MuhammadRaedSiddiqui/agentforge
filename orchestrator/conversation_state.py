@@ -19,7 +19,8 @@ class PartialIntakeData:
     capabilities: list[str] | None = None
     industry: str | None = None
     timezone: str | None = None
-    business_hours: dict[str, str] | None = None
+    # day name -> list of {"open": "HH:MM", "close": "HH:MM"}; empty list = closed
+    business_hours: dict[str, list[dict[str, str]]] | None = None
 
     def required_fields_present(self) -> bool:
         return all(

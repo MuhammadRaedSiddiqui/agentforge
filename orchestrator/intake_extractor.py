@@ -4,6 +4,18 @@ from typing import Any
 from orchestrator.conversation_state import PartialIntakeData
 from shared.vapi_voices import VAPI_VOICES
 
+DAYS_OF_WEEK = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
+
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
 EXTRACT_FUNCTION = {
     "type": "function",
     "function": {
@@ -56,6 +68,29 @@ EXTRACT_FUNCTION = {
                 "timezone": {
                     "type": "string",
                     "description": "IANA timezone string e.g. America/New_York",
+                },
+                "business_hours": {
+                    "type": "object",
+                    "description": (
+                        "Opening hours keyed by lowercase day name. Use 24-hour HH:MM. "
+                        "A day the business is closed must be an empty array. "
+                        'e.g. {"monday": [{"open": "09:00", "close": "17:00"}], '
+                        '"saturday": [{"open": "10:00", "close": "14:00"}], "sunday": []}'
+                    ),
+                    "properties": {
+                        day: {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "open": {"type": "string"},
+                                    "close": {"type": "string"},
+                                },
+                                "required": ["open", "close"],
+                            },
+                        }
+                        for day in DAYS_OF_WEEK
+                    },
                 },
             },
             "required": [],
@@ -335,7 +370,7 @@ def extract_from_conversation(
         response = model.create_completion(**call_kwargs)
         extracted = _extract_tool_call(response)
         if extracted:
-            return extracted
+            return _normalize_extracted(extracted)
 
         # Providers without forced tool_choice may reply with text. Retry once,
         # explicitly instructing the model to call the function.
@@ -358,13 +393,60 @@ def extract_from_conversation(
             )
             retried = _extract_tool_call(response)
             if retried:
-                return retried
+                return _normalize_extracted(retried)
 
         # Last resort: deterministic regex extraction so the conversation always
         # progresses even when the model refuses to emit a tool call.
-        return fallback_extract(messages)
+        return _normalize_extracted(fallback_extract(messages))
     except Exception:
         return {}
+
+
+def normalize_business_hours(value: Any) -> dict[str, list[dict[str, str]]] | None:
+    """Coerce extracted opening hours into the canonical seven-day shape.
+
+    Models return this field unevenly: only the days that were mentioned, title
+    case keys, 12-hour times. Downstream code indexes every weekday, so a
+    partial dict would read as "closed" for days nobody discussed. Returns None
+    when nothing usable survives, so the caller falls back to its default and
+    reports that it did — better than a half-populated week that looks
+    deliberate.
+    """
+    if not isinstance(value, dict):
+        return None
+
+    normalized: dict[str, list[dict[str, str]]] = {day: [] for day in DAYS_OF_WEEK}
+    saw_any = False
+
+    for raw_day, windows in value.items():
+        if not isinstance(raw_day, str):
+            continue
+        day = raw_day.strip().lower()
+        if day not in normalized or not isinstance(windows, list):
+            continue
+        for window in windows:
+            if not isinstance(window, dict):
+                continue
+            opens, closes = window.get("open"), window.get("close")
+            if not isinstance(opens, str) or not isinstance(closes, str):
+                continue
+            if not _HHMM.match(opens.strip()) or not _HHMM.match(closes.strip()):
+                continue
+            normalized[day].append({"open": opens.strip(), "close": closes.strip()})
+            saw_any = True
+
+    return normalized if saw_any else None
+
+
+def _normalize_extracted(extracted: dict[str, Any]) -> dict[str, Any]:
+    """Apply per-field normalization to a raw extraction result."""
+    if "business_hours" in extracted:
+        hours = normalize_business_hours(extracted["business_hours"])
+        if hours is None:
+            del extracted["business_hours"]
+        else:
+            extracted["business_hours"] = hours
+    return extracted
 
 
 def apply_extraction(

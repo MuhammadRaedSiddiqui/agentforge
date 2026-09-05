@@ -7,15 +7,88 @@ import pytest
 
 from orchestrator.conversation_state import PartialIntakeData
 from orchestrator.intake_extractor import (
+    DAYS_OF_WEEK,
     EXTRACT_FUNCTION,
     _convert_messages,
     apply_correction,
     apply_extraction,
     extract_from_conversation,
     fallback_extract,
+    normalize_business_hours,
 )
 
 pytestmark = pytest.mark.unit
+
+
+class TestBusinessHoursExtraction:
+    """business_hours was absent from the extraction schema entirely.
+
+    No provider could populate it, so PartialIntakeData.business_hours was
+    always None and every conversational onboarding silently deployed the
+    Mon-Fri 09:00-17:00 default no matter what the operator said.
+    """
+
+    def test_business_hours_is_in_the_extraction_schema(self) -> None:
+        properties = EXTRACT_FUNCTION["function"]["parameters"]["properties"]  # type: ignore[index]
+        assert "business_hours" in properties
+        assert set(properties["business_hours"]["properties"]) == set(DAYS_OF_WEEK)
+
+    def test_normalizes_partial_week_to_all_seven_days(self) -> None:
+        result = normalize_business_hours({"saturday": [{"open": "10:00", "close": "14:00"}]})
+
+        assert result is not None
+        assert set(result) == set(DAYS_OF_WEEK)
+        assert result["saturday"] == [{"open": "10:00", "close": "14:00"}]
+        assert result["monday"] == []
+
+    def test_accepts_title_case_days_and_trims(self) -> None:
+        result = normalize_business_hours({" Monday ": [{"open": " 09:00 ", "close": "17:00"}]})
+
+        assert result is not None
+        assert result["monday"] == [{"open": "09:00", "close": "17:00"}]
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            None,
+            "Mon-Fri 9-5",
+            {},
+            {"monday": "09:00-17:00"},
+            {"monday": [{"open": "9am", "close": "5pm"}]},
+            {"monday": [{"open": "25:00", "close": "17:00"}]},
+            {"funday": [{"open": "09:00", "close": "17:00"}]},
+        ],
+    )
+    def test_returns_none_when_nothing_usable(self, value: object) -> None:
+        """None makes the caller fall back to its default and say so.
+
+        A half-parsed week is worse than no week: it reads as deliberate.
+        """
+        assert normalize_business_hours(value) is None
+
+    def test_extraction_result_is_normalized(self) -> None:
+        mock = MagicMock()
+        mock.provider = "openai"
+        tool_call = MagicMock()
+        tool_call.function.name = "update_intake"
+        tool_call.function.arguments = json.dumps(
+            {
+                "business_name": "Northgate",
+                "business_hours": {"Saturday": [{"open": "10:00", "close": "14:00"}]},
+            }
+        )
+        message = MagicMock()
+        message.tool_calls = [tool_call]
+        response = MagicMock()
+        response.choices = [MagicMock(message=message)]
+        mock.create_completion.return_value = response
+
+        extracted = extract_from_conversation(
+            [{"role": "user", "parts": ["Northgate, open Saturday 10 to 2"]}], mock
+        )
+
+        assert set(extracted["business_hours"]) == set(DAYS_OF_WEEK)
+        assert extracted["business_hours"]["saturday"] == [{"open": "10:00", "close": "14:00"}]
 
 
 class TestExtractFunction:
