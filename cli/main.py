@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
+from adapters.model_protocol import ModelProvider
 from adapters.supabase_internal import SupabaseInternalClient
 from agents.make_agent.agent import MakeAgent
 from agents.nodejs_agent.agent import NodeJsAgent
@@ -21,10 +22,12 @@ from cli.history import DeploymentHistory
 from cli.prompts import InteractivePrompts
 from cli.session import SessionManager
 from orchestrator.assembler import PackageAssembler
+from orchestrator.current_state_reader import CurrentStateReader
 from orchestrator.intake_schema import normalize_intake, validate_intake
 from orchestrator.orchestrator import Orchestrator
 from orchestrator.planner import Planner
 from orchestrator.template_registry import get_template_registry
+from shared.hashing import compute_state_version
 from shared.ids import generate_deployment_id
 
 
@@ -244,7 +247,8 @@ def _run_execute(
     """
     Run deployment execution with per-action approval.
 
-    Uses FullOrchestrator to connect US1→US2→US3→US4.
+    Builds actions via orchestrator.action_builder, then executes them through
+    Orchestrator.execute_deployment with an approval gate per action.
 
     Args:
         intake: Normalized intake
@@ -259,7 +263,7 @@ def _run_execute(
     import logging
     import os
 
-    from orchestrator.full_orchestrator import FullOrchestrator
+    from orchestrator.action_builder import build_onboarding_actions
 
     organization_id = intake["organization_id"]
     operator = os.getenv("USER", "unknown")
@@ -470,11 +474,14 @@ def _run_execute(
             "organizations", filters={"organization_id": organization_id}
         )
         if not existing_org:
-            internal_client.insert("organizations", {
-                "organization_id": organization_id,
-                "display_name": intake.get("business_name", organization_id),
-                "status": "active",
-            })
+            internal_client.insert(
+                "organizations",
+                {
+                    "organization_id": organization_id,
+                    "display_name": intake.get("business_name", organization_id),
+                    "status": "active",
+                },
+            )
             print(f"  ✓ Organization record created: {organization_id}")
 
         # First, insert the intake record
@@ -517,10 +524,7 @@ def _run_execute(
         print(f"  ✓ Deployment record created: {deployment_id}")
 
         # Translate the validated package into concrete, approved actions.
-        action_builder = FullOrchestrator(internal_client)
-        proposed_actions = action_builder._build_proposed_actions(
-            package, generation_intake, deployment_id
-        )
+        proposed_actions = build_onboarding_actions(package, generation_intake)
 
         # Execute deployment with per-action approval
         print("\n[6/6] Executing deployment...")
@@ -968,7 +972,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
             try:
                 internal_store = SupabaseInternalClient()
                 # Try a simple query
-                internal_store.supabase.table("organizations").select("organization_id").limit(1).execute()
+                internal_store.supabase.table("organizations").select("organization_id").limit(
+                    1
+                ).execute()
                 print("  ✓ Internal store accessible")
             except Exception as e:
                 print(f"  ✗ Internal store error: {e}")
@@ -1242,20 +1248,22 @@ def cmd_update(args: argparse.Namespace) -> int:
                 return 0
 
             proposed_actions = _build_update_actions(
-                update_tasks, args.organization, changes, current_state
+                update_tasks, args.organization, changes, current_state, state_reader
             )
 
             if not proposed_actions:
                 print("\n✓ No actions required")
                 return 0
 
-            internal_store.create_deployment({
-                "deployment_id": new_deployment_id,
-                "organization_id": args.organization,
-                "status": "executing",
-                "intent": args.intent,
-                "parent_deployment_id": deployment_id,
-            })
+            internal_store.create_deployment(
+                {
+                    "deployment_id": new_deployment_id,
+                    "organization_id": args.organization,
+                    "status": "executing",
+                    "intent": args.intent,
+                    "parent_deployment_id": deployment_id,
+                }
+            )
 
             orchestrator = Orchestrator(internal_store)
             result = orchestrator.execute_deployment(
@@ -1266,7 +1274,9 @@ def cmd_update(args: argparse.Namespace) -> int:
             )
 
             if result.get("status") == "completed":
-                print(f"\n✓ Update complete — {result.get('completed_actions', 0)} action(s) applied")
+                print(
+                    f"\n✓ Update complete — {result.get('completed_actions', 0)} action(s) applied"
+                )
                 return 0
             elif result.get("status") == "aborted":
                 print(f"\n⚠️  Update aborted: {result.get('message', '')}")
@@ -1292,9 +1302,19 @@ def _build_update_actions(
     organization_id: str,
     changes: dict,
     current_state: dict,
+    state_reader: CurrentStateReader | None = None,
 ) -> list:
-    """Build ProposedAction list from update tasks."""
+    """
+    Build ProposedAction list from update tasks.
+
+    Update actions carry a state_version and the baseline projection it hashes.
+    Immediately before each write, the orchestrator re-reads the same projection
+    and compares: if it differs, someone changed the resource after planning and
+    the operator is asked before anything is overwritten.
+    """
     from orchestrator.approval import build_proposed_action
+
+    reader = state_reader or CurrentStateReader()
 
     actions = []
     for task in tasks:
@@ -1303,6 +1323,7 @@ def _build_update_actions(
             assistants = vapi_state.get("assistants", [])
             assistant_id = assistants[0]["id"] if assistants else None
             if assistant_id:
+                baseline = reader.read_staleness_state("vapi", "assistant", str(assistant_id))
                 actions.append(
                     build_proposed_action(
                         platform="vapi",
@@ -1312,6 +1333,8 @@ def _build_update_actions(
                             "assistant_id": assistant_id,
                             "updates": {k: v["to"] for k, v in changes.items()},
                         },
+                        state_version=compute_state_version(baseline),
+                        baseline_state=baseline,
                         retry_policy="none",
                         reconciliation_strategy="read_after_write",
                         compensation_operation=None,
@@ -1323,6 +1346,7 @@ def _build_update_actions(
             make_state = current_state.get("platforms", {}).get("make", {})
             scenarios = make_state.get("scenarios", [])
             for scenario in scenarios:
+                baseline = reader.read_staleness_state("make", "scenario", str(scenario["id"]))
                 actions.append(
                     build_proposed_action(
                         platform="make",
@@ -1332,6 +1356,8 @@ def _build_update_actions(
                             "scenario_id": scenario["id"],
                             "updates": {k: v["to"] for k, v in changes.items()},
                         },
+                        state_version=compute_state_version(baseline),
+                        baseline_state=baseline,
                         retry_policy="none",
                         reconciliation_strategy="read_after_write",
                         compensation_operation=None,
@@ -1528,6 +1554,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
 
                 print("\n[1/3] Initializing model from environment...")
 
+                model: ModelProvider
                 if provider_name == "bedrock":
                     from adapters.bedrock_wrapper import initialize_bedrock_model
 
@@ -1563,6 +1590,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
 
                 if provider_name != "bedrock":
                     from adapters.model_wrapper import reset_model as _reset
+
                     _reset()
 
                 return 0
@@ -1659,6 +1687,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
         provider = os.getenv("MODEL_PROVIDER", "gemini").lower()
 
         # Initialize model based on provider
+        model: ModelProvider
         if provider == "bedrock":
             from adapters.bedrock_wrapper import initialize_bedrock_model
 
@@ -1701,8 +1730,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 receipt = vapi.list_voices()
                 voices = receipt.response_data.get("voices", [])
                 available_ids = [
-                    v.get("voiceId") or v.get("id") or v.get("name", "")
-                    for v in voices
+                    v.get("voiceId") or v.get("id") or v.get("name", "") for v in voices
                 ]
                 if available_ids and voice_id not in available_ids:
                     print(f"\nVoice '{voice_id}' not found in Vapi.", file=sys.stderr)
@@ -2142,10 +2170,6 @@ if __name__ == "__main__":
     import os
 
     if os.name == "nt":
-        sys.stdout = io.TextIOWrapper(
-            sys.stdout.buffer, encoding="utf-8", errors="replace"
-        )
-        sys.stderr = io.TextIOWrapper(
-            sys.stderr.buffer, encoding="utf-8", errors="replace"
-        )
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
     sys.exit(main())

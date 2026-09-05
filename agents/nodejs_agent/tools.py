@@ -136,8 +136,6 @@ def verify_hmac_presence(content: str) -> bool:
         r"WEBHOOK_SECRET",
     ]
 
-    content_lower = content.lower()
-
     # Must have at least 2 patterns to consider it a proper HMAC implementation
     matches = sum(1 for pattern in hmac_patterns if re.search(pattern, content, re.IGNORECASE))
 
@@ -202,9 +200,12 @@ def detect_unrelated_changes(diff: str, organization_id: str) -> list[str]:
                 unrelated.append(f"Line {i + 1}: Global middleware change detected")
 
             # Check for changes to other routes
-            if "app.post(" in line or "app.get(" in line:
-                if organization_id not in line and not line.strip().startswith("//"):
-                    unrelated.append(f"Line {i + 1}: Change to unrelated route")
+            if (
+                ("app.post(" in line or "app.get(" in line)
+                and organization_id not in line
+                and not line.strip().startswith("//")
+            ):
+                unrelated.append(f"Line {i + 1}: Change to unrelated route")
 
     return unrelated
 

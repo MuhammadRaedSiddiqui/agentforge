@@ -76,7 +76,7 @@ class TestPlanner:
         for task in tasks:
             if "validate" in task.action_type.lower():
                 # Find corresponding generation task
-                gen_task_id = task.action_type.replace("validate_", "generate_")
+                task.action_type.replace("validate_", "generate_")
                 # Validation should depend on generation
                 assert len(task.dependencies) > 0
 

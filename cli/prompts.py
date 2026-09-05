@@ -110,15 +110,16 @@ class InteractivePrompts:
         while True:
             response = input("\nChoice (proceed/view/abort): ").strip().lower()
 
-            if response in ["proceed", "view", "abort", "1", "2", "3"]:
-                # Map numbers to choices
-                if response == "1":
-                    return "proceed"
-                elif response == "2":
-                    return "view"
-                elif response == "3":
-                    return "abort"
-                return response
+            choices = {
+                "1": "proceed",
+                "proceed": "proceed",
+                "2": "view",
+                "view": "view",
+                "3": "abort",
+                "abort": "abort",
+            }
+            if response in choices:
+                return choices[response]
 
             print("Invalid choice. Please enter 'proceed', 'view', or 'abort'.")
 
@@ -221,22 +222,16 @@ class InteractivePrompts:
         while True:
             response = input("\nDecision (approve/abort/revise): ").strip().lower()
 
-            if response in ["approve", "abort", "revise", "1", "2", "3"]:
-                # Map numbers to decisions
-                if response == "1":
-                    return "approved"
-                elif response == "2":
-                    return "rejected_abort"
-                elif response == "3":
-                    return "rejected_revise"
-
-                # Map words to decision types
-                if response == "approve":
-                    return "approved"
-                elif response == "abort":
-                    return "rejected_abort"
-                elif response == "revise":
-                    return "rejected_revise"
+            decisions = {
+                "1": "approved",
+                "approve": "approved",
+                "2": "rejected_abort",
+                "abort": "rejected_abort",
+                "3": "rejected_revise",
+                "revise": "rejected_revise",
+            }
+            if response in decisions:
+                return decisions[response]
 
             print("Invalid choice. Please enter 'approve', 'abort', or 'revise'.")
 

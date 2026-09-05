@@ -55,4 +55,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt pytest pytest-timeout pytest-mock
-      - run: pytest -m "unit or contract" --timeout=30 --tb=short -q
+      # Deselect by exclusion, not inclusion: a new test file that forgets its
+      # marker is then RUN by default rather than silently skipped. The previous
+      # `-m "unit or contract"` selected 166 of 640 tests for this reason.
+      - run: pytest -m "not integration and not staging" --timeout=30 --tb=short -q

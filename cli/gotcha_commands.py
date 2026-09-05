@@ -30,19 +30,25 @@ def cmd_gotcha_review(args: argparse.Namespace) -> int:
 
             print(f"\n{len(proposals)} pending gotcha proposal(s):\n")
             for i, proposal in enumerate(proposals, 1):
-                print(f"[{i}] {proposal.get('platform', 'unknown').upper()} - {proposal.get('symptom', 'No symptom')}")
+                print(
+                    f"[{i}] {proposal.get('platform', 'unknown').upper()} - {proposal.get('symptom', 'No symptom')}"
+                )
                 print(f"    Topic: {proposal.get('topic', 'unknown')}")
                 print(f"    Proposed: {proposal.get('proposed_at', 'unknown')[:10]}")
 
                 # Show duplicate check results
                 dup_check = proposal.get("duplicate_check", {})
                 if dup_check.get("potential_duplicates", 0) > 0:
-                    print(f"    ⚠️  {dup_check['potential_duplicates']} potential duplicate(s) found")
+                    print(
+                        f"    ⚠️  {dup_check['potential_duplicates']} potential duplicate(s) found"
+                    )
 
                 print(f"    File: {proposal.get('_file', 'unknown')}")
                 print()
 
-            print("Use 'agent-forge gotcha approve <number>' or 'agent-forge gotcha reject <number>'")
+            print(
+                "Use 'agent-forge gotcha approve <number>' or 'agent-forge gotcha reject <number>'"
+            )
             return 0
 
         elif args.gotcha_command == "approve":
@@ -60,7 +66,9 @@ def cmd_gotcha_review(args: argparse.Namespace) -> int:
                 return 1
 
             if proposal_num < 1 or proposal_num > len(proposals):
-                print(f"Error: Invalid proposal number. Must be 1-{len(proposals)}", file=sys.stderr)
+                print(
+                    f"Error: Invalid proposal number. Must be 1-{len(proposals)}", file=sys.stderr
+                )
                 return 1
 
             proposal = proposals[proposal_num - 1]
@@ -74,7 +82,9 @@ def cmd_gotcha_review(args: argparse.Namespace) -> int:
             # Show duplicate warnings
             dup_check = proposal.get("duplicate_check", {})
             if dup_check.get("potential_duplicates", 0) > 0:
-                print(f"\n  ⚠️  WARNING: {dup_check['potential_duplicates']} potential duplicate(s):")
+                print(
+                    f"\n  ⚠️  WARNING: {dup_check['potential_duplicates']} potential duplicate(s):"
+                )
                 for dup in dup_check.get("similar_gotchas", []):
                     print(f"      - {dup['id']} (similarity: {dup['similarity']:.2f})")
                 print()
@@ -112,11 +122,13 @@ def cmd_gotcha_review(args: argparse.Namespace) -> int:
             proposal_num = getattr(args, "proposal_number", None)
             if proposal_num is None:
                 print("Error: Proposal number required", file=sys.stderr)
-                print("Usage: agent-forge gotcha reject <number> [--reason \"...\"]", file=sys.stderr)
+                print('Usage: agent-forge gotcha reject <number> [--reason "..."]', file=sys.stderr)
                 return 1
 
             if proposal_num < 1 or proposal_num > len(proposals):
-                print(f"Error: Invalid proposal number. Must be 1-{len(proposals)}", file=sys.stderr)
+                print(
+                    f"Error: Invalid proposal number. Must be 1-{len(proposals)}", file=sys.stderr
+                )
                 return 1
 
             proposal = proposals[proposal_num - 1]
@@ -151,5 +163,6 @@ def cmd_gotcha_review(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1

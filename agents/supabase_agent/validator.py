@@ -293,4 +293,4 @@ class SqlValidator:
         for match in re.finditer(create_pattern, sql, re.IGNORECASE):
             tables.add(match.group(1))
 
-        return sorted(list(tables))
+        return sorted(tables)

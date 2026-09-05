@@ -3,11 +3,15 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from orchestrator.conversation_agent import ConversationAgent
 from orchestrator.conversation_state import (
     PartialIntakeData,
     SessionPhase,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def _make_mock_model(extraction_result: dict | None = None, response_text: str = "OK") -> MagicMock:
@@ -115,8 +119,11 @@ class TestPhaseTransitions:
             state = agent.new_session()
             state.phase = SessionPhase.CONFIRMING
             state.partial_intake = PartialIntakeData(
-                org_id="t", business_name="T", phone_number="+1",
-                voice_id="v", capabilities=["booking"],
+                org_id="t",
+                business_name="T",
+                phone_number="+1",
+                voice_id="v",
+                capabilities=["booking"],
             )
             _, state = agent.turn(word, state)
             assert state.phase == SessionPhase.EXECUTING, f"Failed on: {word}"
@@ -129,8 +136,11 @@ class TestPhaseTransitions:
         state = agent.new_session()
         state.phase = SessionPhase.CONFIRMING
         state.partial_intake = PartialIntakeData(
-            org_id="t", business_name="T", phone_number="+1",
-            voice_id="v", capabilities=["booking"],
+            org_id="t",
+            business_name="T",
+            phone_number="+1",
+            voice_id="v",
+            capabilities=["booking"],
         )
 
         response, state = agent.turn("cancel", state)
@@ -149,8 +159,11 @@ class TestPhaseTransitions:
         state = agent.new_session()
         state.phase = SessionPhase.CONFIRMING
         state.partial_intake = PartialIntakeData(
-            org_id="test", business_name="Test", phone_number="+1234",
-            voice_id="jennifer", capabilities=["booking"],
+            org_id="test",
+            business_name="Test",
+            phone_number="+1234",
+            voice_id="jennifer",
+            capabilities=["booking"],
         )
 
         response, state = agent.turn("Actually use rachel instead", state)
@@ -207,7 +220,9 @@ class TestPlanSummary:
 
         json_field_names = ["org_id", "voice_id", "phone_number", "business_name", "capabilities"]
         for field_name in json_field_names:
-            assert field_name not in summary, f"Found JSON field name '{field_name}' in plan summary"
+            assert field_name not in summary, (
+                f"Found JSON field name '{field_name}' in plan summary"
+            )
 
 
 class TestVoiceSuggestions:

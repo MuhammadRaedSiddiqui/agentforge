@@ -9,7 +9,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from supabase import Client, create_client
+from supabase import create_client
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
     print(f"\n[INFO] Connecting to: {url[:30]}...")
 
     try:
-        supabase: Client = create_client(url, key)
+        create_client(url, key)
         print("[OK] Connected to Supabase")
     except Exception as e:
         print(f"[FAIL] Connection failed: {e}")
@@ -51,13 +51,12 @@ def main():
     print()
 
     # Apply each migration
-    success_count = 0
     for migration_file in migration_files:
         print(f"[RUN] {migration_file.name}")
 
         try:
             # Read SQL
-            sql_content = migration_file.read_text(encoding="utf-8")
+            migration_file.read_text(encoding="utf-8")
 
             # Execute via RPC (raw SQL execution)
             # Note: We need to use the REST API directly since supabase-py
@@ -69,7 +68,7 @@ def main():
 
                 # Extract connection details from Supabase URL
                 # Format: https://PROJECT_REF.supabase.co
-                project_ref = url.replace("https://", "").split(".")[0]
+                url.replace("https://", "").split(".")[0]
 
                 # Supabase uses direct postgres connection
                 # Connection string format for Supabase

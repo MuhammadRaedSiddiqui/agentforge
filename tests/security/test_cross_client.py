@@ -150,15 +150,6 @@ class TestCrossClientSecurity:
 
     def test_detects_resource_ids_from_other_deployments(self) -> None:
         """Test that resource IDs from other deployments are detected."""
-        organization_id = "org-001"
-
-        artifact_content = {
-            "assistant": {
-                "tools": [
-                    {"id": "tool-abc"},  # Could be from another deployment
-                ],
-            },
-        }
 
         # In real implementation, would check against known resources
         # For this test, just verify detection mechanism exists

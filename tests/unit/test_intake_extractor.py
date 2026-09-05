@@ -3,6 +3,8 @@
 import json
 from unittest.mock import MagicMock
 
+import pytest
+
 from orchestrator.conversation_state import PartialIntakeData
 from orchestrator.intake_extractor import (
     EXTRACT_FUNCTION,
@@ -12,6 +14,8 @@ from orchestrator.intake_extractor import (
     extract_from_conversation,
     fallback_extract,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestExtractFunction:
@@ -131,16 +135,20 @@ class TestExtractFromConversation:
         mock_response = MagicMock()
         mock_tool_call = MagicMock()
         mock_tool_call.function.name = "update_intake"
-        mock_tool_call.function.arguments = json.dumps({
-            "business_name": "Miami Glow Salon",
-            "org_id": "miami_glow_salon",
-            "capabilities": ["booking", "cancellation"],
-        })
+        mock_tool_call.function.arguments = json.dumps(
+            {
+                "business_name": "Miami Glow Salon",
+                "org_id": "miami_glow_salon",
+                "capabilities": ["booking", "cancellation"],
+            }
+        )
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.tool_calls = [mock_tool_call]
         mock_model.create_completion.return_value = mock_response
 
-        messages = [{"role": "user", "parts": ["Set up Miami Glow Salon with booking and cancellation"]}]
+        messages = [
+            {"role": "user", "parts": ["Set up Miami Glow Salon with booking and cancellation"]}
+        ]
         result = extract_from_conversation(messages, mock_model)
         assert result["business_name"] == "Miami Glow Salon"
         assert result["org_id"] == "miami_glow_salon"
@@ -151,11 +159,13 @@ class TestExtractFromConversation:
         mock_response = MagicMock()
         mock_tool_call = MagicMock()
         mock_tool_call.function.name = "update_intake"
-        mock_tool_call.function.arguments = json.dumps({
-            "business_name": "Test",
-            "phone_number": "",
-            "voice_id": None,
-        })
+        mock_tool_call.function.arguments = json.dumps(
+            {
+                "business_name": "Test",
+                "phone_number": "",
+                "voice_id": None,
+            }
+        )
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.tool_calls = [mock_tool_call]
         mock_model.create_completion.return_value = mock_response

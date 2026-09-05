@@ -260,9 +260,7 @@ class TestBlueprintMetadataRegression:
         with open(blueprint_path, encoding="utf-8") as f:
             blueprint = json.load(f)
 
-        assert "metadata" in blueprint, (
-            f"Blueprint {capability}.json missing metadata section"
-        )
+        assert "metadata" in blueprint, f"Blueprint {capability}.json missing metadata section"
 
         metadata = blueprint["metadata"]
 
@@ -270,9 +268,7 @@ class TestBlueprintMetadataRegression:
         expected_fields = ["version", "capability", "template_version"]
 
         for field in expected_fields:
-            assert field in metadata, (
-                f"Blueprint {capability}.json metadata missing field: {field}"
-            )
+            assert field in metadata, f"Blueprint {capability}.json metadata missing field: {field}"
 
     @pytest.mark.parametrize(
         "capability",
@@ -317,12 +313,8 @@ class TestBlueprintNamingRegression:
         )
 
         name = blueprint["name"]
-        assert isinstance(name, str), (
-            f"Blueprint {capability}.json name must be a string"
-        )
-        assert len(name) > 0, (
-            f"Blueprint {capability}.json name cannot be empty"
-        )
+        assert isinstance(name, str), f"Blueprint {capability}.json name must be a string"
+        assert len(name) > 0, f"Blueprint {capability}.json name cannot be empty"
 
 
 class TestBlueprintRouterSchemaRegression:

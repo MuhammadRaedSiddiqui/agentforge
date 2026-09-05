@@ -89,6 +89,12 @@ ignore = [
     "E501",  # line too long (handled by formatter)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# `with patch("...") as MockVapi:` is the conventional spelling for a patched
+# class. Lowercasing these would obscure that the binding is a class, not an
+# instance, so the naming rule is waived for tests rather than the names changed.
+"tests/**" = ["N806"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

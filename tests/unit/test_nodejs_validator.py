@@ -9,7 +9,11 @@ Tests cover:
 - Diff format validation
 """
 
+import pytest
+
 from agents.nodejs_agent.validator import NodeJsValidator
+
+pytestmark = pytest.mark.unit
 
 
 class TestNodeJsDiffValidator:

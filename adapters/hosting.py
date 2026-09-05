@@ -119,11 +119,11 @@ class RenderAdapter:
             return result
 
         except requests.Timeout as e:
-            raise TransientError(f"Request timeout: {e}")
+            raise TransientError(f"Request timeout: {e}") from e
         except requests.ConnectionError as e:
-            raise TransientError(f"Connection error: {e}")
+            raise TransientError(f"Connection error: {e}") from e
         except requests.RequestException as e:
-            raise PermanentError(f"Request failed: {e}")
+            raise PermanentError(f"Request failed: {e}") from e
 
     def get_env_variable(self, key: str) -> AdapterReceipt:
         """

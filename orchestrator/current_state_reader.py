@@ -3,6 +3,13 @@ Current-state reader for updates.
 
 Implements T148: Current-state reader (read all relevant external resources
 for the organization, compute state hashes)
+
+Also provides the single source of truth for *staleness* projections. An update
+action records a state_version when it is planned; immediately before the write
+executes, the same projection is read again and re-hashed. If the two differ,
+someone changed the resource out from under us. Both hashes must be produced by
+`read_staleness_state` so the projections cannot drift apart — a projection
+mismatch would report drift on every action and train operators to ignore it.
 """
 
 from typing import Any
@@ -12,7 +19,21 @@ from adapters.make import MakeAdapter
 from adapters.supabase_client import SupabaseClientAdapter
 from adapters.supabase_internal import SupabaseInternalClient
 from adapters.vapi import VapiAdapter
-from shared.hashing import hash_json
+from shared.errors import PermanentError
+from shared.hashing import compute_state_version, hash_json
+
+# Blueprint fields Make returns on GET but that are payload-level concerns, not
+# scenario content. They move on their own, so hashing them would manufacture
+# drift. See knowledge-base/gotchas/make-blueprint-strip-metadata.md.
+_VOLATILE_BLUEPRINT_FIELDS = ("teamId", "scheduling", "description")
+
+
+class StaleStateReadError(PermanentError):
+    """Raised when current state cannot be read for a staleness comparison.
+
+    A failed read means the remote state is *unknown*, which is not the same as
+    unchanged. Callers must surface this rather than treating it as "not stale".
+    """
 
 
 class CurrentStateReader:
@@ -53,14 +74,13 @@ class CurrentStateReader:
             "state_hashes": {},
         }
 
-        # Get external resources from internal store
-        # Note: get_external_resources method needs to be implemented in SupabaseInternalClient
-        resources: list[dict[str, Any]] = []
-        try:
-            resources = internal_store.get_external_resources(deployment_id)
-        except AttributeError:
-            # Method not yet implemented, continue with empty resources
-            pass
+        # Get external resources from internal store. This was previously
+        # wrapped in `except AttributeError: pass` from when the method was
+        # unimplemented; it exists now (SupabaseInternalClient.get_external_
+        # resources), and swallowing the error here would silently yield an
+        # empty resource set — which reads as "nothing deployed" rather than
+        # as a failure, and would leave update actions with nothing to check.
+        resources: list[dict[str, Any]] = internal_store.get_external_resources(deployment_id)
 
         # Read Vapi resources
         vapi_state = self._read_vapi_state(resources)
@@ -93,6 +113,97 @@ class CurrentStateReader:
         current_state["overall_state_hash"] = hash_json(state_hashes_dict)
 
         return current_state
+
+    # ------------------------------------------------------------------
+    # Staleness projections
+    # ------------------------------------------------------------------
+
+    def read_staleness_state(
+        self,
+        platform: str,
+        resource_type: str,
+        remote_id: str,
+    ) -> dict[str, Any]:
+        """
+        Read the narrow, stable projection of a resource used for drift checks.
+
+        Deliberately narrower than the display projections built by
+        `read_current_state`: it includes only fields a human editing the
+        resource would change. Volatile fields (Make's `is_active` and
+        `scheduling`, deploy status, timestamps) are excluded, because drift
+        detection that fires on every run is drift detection nobody reads.
+
+        Args:
+            platform: Platform name (vapi, make)
+            resource_type: Resource type (assistant, scenario)
+            remote_id: Remote resource identifier
+
+        Returns:
+            Projection dictionary suitable for hashing
+
+        Raises:
+            StaleStateReadError: If the resource cannot be read. Unknown state
+                is not the same as unchanged state and must not be swallowed.
+        """
+        key = (platform, resource_type)
+
+        try:
+            if key == ("vapi", "assistant"):
+                result = self.vapi.get_assistant(remote_id)
+                if result.status != "success":
+                    raise StaleStateReadError(
+                        f"Vapi assistant {remote_id} read returned status {result.status}"
+                    )
+                data = result.response_data
+                return {
+                    "name": data.get("name"),
+                    "model": data.get("model"),
+                    "voice": data.get("voice"),
+                    "first_message": data.get("firstMessage"),
+                }
+
+            if key == ("make", "scenario"):
+                scenario = self.make.get_scenario(int(remote_id))
+                if scenario.status != "success":
+                    raise StaleStateReadError(
+                        f"Make scenario {remote_id} read returned status {scenario.status}"
+                    )
+                blueprint_receipt = self.make.get_scenario_blueprint(int(remote_id))
+                if blueprint_receipt.status != "success":
+                    raise StaleStateReadError(
+                        f"Make blueprint for scenario {remote_id} returned "
+                        f"status {blueprint_receipt.status}"
+                    )
+                blueprint = blueprint_receipt.response_data.get("blueprint")
+                if isinstance(blueprint, dict):
+                    blueprint = {
+                        k: v for k, v in blueprint.items() if k not in _VOLATILE_BLUEPRINT_FIELDS
+                    }
+                return {
+                    "name": scenario.response_data.get("name"),
+                    "blueprint": blueprint,
+                }
+
+        except StaleStateReadError:
+            raise
+        except Exception as error:  # adapter/transport failure
+            raise StaleStateReadError(
+                f"Could not read current state for {platform}/{resource_type} {remote_id}: {error}"
+            ) from error
+
+        raise StaleStateReadError(
+            f"No staleness projection defined for {platform}/{resource_type}. "
+            "Add one before planning updates against this resource."
+        )
+
+    def read_staleness_version(
+        self,
+        platform: str,
+        resource_type: str,
+        remote_id: str,
+    ) -> str:
+        """Read a resource's staleness projection and hash it."""
+        return compute_state_version(self.read_staleness_state(platform, resource_type, remote_id))
 
     def _read_vapi_state(self, resources: list[dict[str, Any]]) -> dict[str, Any]:
         """

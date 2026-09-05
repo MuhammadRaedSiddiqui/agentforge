@@ -225,10 +225,7 @@ class DeploymentStateMachine:
             return DeploymentStateMachine.requires_recovery(state)
 
         # For modifying intents, must be in terminal state or no deployment exists
-        if DeploymentStateMachine.is_modifying(state):
-            return False
-
-        return True
+        return not DeploymentStateMachine.is_modifying(state)
 
     @staticmethod
     def get_state_description(state: str) -> str:

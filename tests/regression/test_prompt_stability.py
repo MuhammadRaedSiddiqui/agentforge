@@ -86,7 +86,9 @@ class TestConversationalBehaviorRegression:
         This is a critical UX requirement - users should see plain language,
         not technical field names like org_id, voice_id, etc.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
         mock_model = _make_mock_model()
         agent = ConversationAgent(mock_model)
         state = agent.new_session()
@@ -130,7 +132,9 @@ class TestConversationalBehaviorRegression:
         Users expect common affirmatives (yes, ok, proceed) to confirm plans.
         Removing these would break user workflows.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
         mock_model = _make_mock_model()
         agent = ConversationAgent(mock_model)
 
@@ -161,7 +165,9 @@ class TestConversationalBehaviorRegression:
 
         Users expect common negatives (no, cancel, stop) to abort deployments.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
         mock_model = _make_mock_model()
         agent = ConversationAgent(mock_model)
 
@@ -192,7 +198,9 @@ class TestConversationalBehaviorRegression:
 
         First message sets expectations for the entire conversation.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
         mock_model = _make_mock_model()
         agent = ConversationAgent(mock_model)
 
@@ -202,9 +210,9 @@ class TestConversationalBehaviorRegression:
         assert "Agent Forge" in greeting or "agent" in greeting.lower()
 
         # Must indicate readiness
-        assert any(
-            word in greeting.lower() for word in ["ready", "help", "set up", "tell me"]
-        ), "Greeting doesn't indicate readiness or what to do next"
+        assert any(word in greeting.lower() for word in ["ready", "help", "set up", "tell me"]), (
+            "Greeting doesn't indicate readiness or what to do next"
+        )
 
         # Should be concise (not overly verbose)
         assert len(greeting) < 500, "Greeting is too verbose"
@@ -220,13 +228,19 @@ class TestPhaseTransitionRegression:
 
         Transitioning early would result in incomplete deployments.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
 
         # Test with missing fields
         incomplete_cases = [
             {"org_id": "test"},  # Missing everything else
             {"org_id": "test", "business_name": "Test"},  # Missing phone, voice, capabilities
-            {"org_id": "test", "business_name": "Test", "phone_number": "+1234"},  # Missing voice, capabilities
+            {
+                "org_id": "test",
+                "business_name": "Test",
+                "phone_number": "+1234",
+            },  # Missing voice, capabilities
         ]
 
         for incomplete_data in incomplete_cases:
@@ -247,7 +261,9 @@ class TestPhaseTransitionRegression:
 
         Execution pipeline depends on this field being present.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
         mock_model = _make_mock_model()
         agent = ConversationAgent(mock_model)
 
@@ -282,7 +298,9 @@ class TestConfirmedIntakeRegression:
 
         Missing fields cause execution failures downstream.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
         mock_model = _make_mock_model()
         agent = ConversationAgent(mock_model)
 
@@ -326,7 +344,9 @@ class TestConfirmedIntakeRegression:
 
         Changing this mapping breaks the execution pipeline.
         """
-        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(encoding="utf-8")
+        mock_path.read_text.return_value = Path("memory/orchestrator_system_prompt.md").read_text(
+            encoding="utf-8"
+        )
         mock_model = _make_mock_model()
         agent = ConversationAgent(mock_model)
 
@@ -342,13 +362,13 @@ class TestConfirmedIntakeRegression:
         confirmed = agent._build_confirmed_intake(state)
 
         # Verify field mapping
-        assert confirmed["organization_id"] == "test_org", (
-            "org_id not mapped to organization_id"
-        )
+        assert confirmed["organization_id"] == "test_org", "org_id not mapped to organization_id"
         assert confirmed["enabled_capabilities"] == ["booking", "cancellation"], (
             "capabilities not mapped to enabled_capabilities"
         )
 
         # Ensure old names are NOT present
         assert "org_id" not in confirmed, "org_id should be mapped to organization_id"
-        assert "capabilities" not in confirmed, "capabilities should be mapped to enabled_capabilities"
+        assert "capabilities" not in confirmed, (
+            "capabilities should be mapped to enabled_capabilities"
+        )

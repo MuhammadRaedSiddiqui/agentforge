@@ -149,7 +149,7 @@ class TemplateRegistry:
             self._templates_by_type[template_type].append(template_id)
 
         except Exception as e:
-            raise ValueError(f"Failed to load template {file_path}: {str(e)}")
+            raise ValueError(f"Failed to load template {file_path}: {str(e)}") from e
 
     def _load_sql_template(self, file_path: Path, template_id: str, template_type: str) -> None:
         """Load a SQL template file."""
@@ -184,7 +184,7 @@ class TemplateRegistry:
             self._templates_by_type[template_type].append(template_id)
 
         except Exception as e:
-            raise ValueError(f"Failed to load SQL template {file_path}: {str(e)}")
+            raise ValueError(f"Failed to load SQL template {file_path}: {str(e)}") from e
 
     def _compute_hash(self, content: str) -> str:
         """Compute SHA-256 hash of template content."""
@@ -236,7 +236,7 @@ class TemplateRegistry:
             with open(template.file_path, encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
-            raise ValueError(f"Failed to read template {template_id}: {str(e)}")
+            raise ValueError(f"Failed to read template {template_id}: {str(e)}") from e
 
     def get_templates_by_type(self, template_type: str) -> list[TemplateMetadata]:
         """

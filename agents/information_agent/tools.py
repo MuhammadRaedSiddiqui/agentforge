@@ -146,10 +146,7 @@ def propose_new_knowledge(
     )
 
     # Flag potential duplicates (similarity > 0.75)
-    potential_duplicates = [
-        match for match in duplicate_check
-        if match.get("similarity", 0) > 0.75
-    ]
+    potential_duplicates = [match for match in duplicate_check if match.get("similarity", 0) > 0.75]
 
     # Step 2: Create proposal structure
     proposal = {
@@ -200,8 +197,8 @@ def propose_new_knowledge(
         "proposal_file": str(proposal_file),
         "duplicate_check": proposal["duplicate_check"],
         "message": f"Knowledge proposal saved to {proposal_file}. "
-                   f"Found {len(potential_duplicates)} potential duplicate(s). "
-                   "Requires human approval before becoming verified.",
+        f"Found {len(potential_duplicates)} potential duplicate(s). "
+        "Requires human approval before becoming verified.",
         "next_steps": [
             "Review potential duplicates (if any)",
             "Human reviewer should verify accuracy",

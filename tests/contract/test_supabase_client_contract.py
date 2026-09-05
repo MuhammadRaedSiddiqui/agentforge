@@ -23,6 +23,8 @@ from shared.errors import (
     ValidationError,
 )
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture
 def supabase_adapter() -> SupabaseClientAdapter:
@@ -130,7 +132,7 @@ class TestSupabaseSelectOperations:
             mock_response.headers = {}
             mock_request.return_value = mock_response
 
-            receipt = supabase_adapter.select_rows(
+            supabase_adapter.select_rows(
                 "organizations",
                 organization_id="test_org",
             )
@@ -151,7 +153,7 @@ class TestSupabaseSelectOperations:
             mock_response.headers = {}
             mock_request.return_value = mock_response
 
-            receipt = supabase_adapter.select_rows(
+            supabase_adapter.select_rows(
                 "organizations",
                 select_fields="organization_id,business_name",
             )
@@ -237,7 +239,7 @@ class TestSupabaseInsertOperations:
             mock_response.headers = {}
             mock_request.return_value = mock_response
 
-            receipt = supabase_adapter.insert_org_record(
+            supabase_adapter.insert_org_record(
                 organization_id="test_org",
                 business_name="Test Organization",
             )
@@ -516,7 +518,9 @@ class TestSupabaseURLValidation:
 
     def test_missing_url(self) -> None:
         """Test that missing URL raises error."""
-        with patch.dict("os.environ", {"SUPABASE_CLIENT_SERVICE_ROLE_KEY": "test_key"}):
+        # clear=True so the assertion depends on this dict alone, not on
+        # SUPABASE_CLIENT_URL happening to be absent from the ambient env.
+        with patch.dict("os.environ", {"SUPABASE_CLIENT_SERVICE_ROLE_KEY": "test_key"}, clear=True):
             with pytest.raises(ValidationError) as exc_info:
                 SupabaseClientAdapter()
 
@@ -524,7 +528,9 @@ class TestSupabaseURLValidation:
 
     def test_missing_key(self) -> None:
         """Test that missing service role key raises error."""
-        with patch.dict("os.environ", {"SUPABASE_CLIENT_URL": "https://test.supabase.co"}):
+        with patch.dict(
+            "os.environ", {"SUPABASE_CLIENT_URL": "https://test.supabase.co"}, clear=True
+        ):
             with pytest.raises(ValidationError) as exc_info:
                 SupabaseClientAdapter()
 

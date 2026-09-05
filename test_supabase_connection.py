@@ -4,8 +4,10 @@ Tests only the Supabase variables without requiring full config.
 """
 
 import os
+
 from dotenv import load_dotenv
-from supabase import create_client, Client
+
+from supabase import Client, create_client
 
 
 def main():
@@ -23,7 +25,7 @@ def main():
         print("[FAIL] SUPABASE_INTERNAL_SERVICE_ROLE_KEY not set in .env")
         return
 
-    print(f"[OK] Environment variables loaded")
+    print("[OK] Environment variables loaded")
     print(f"     URL: {url[:30]}...")
     print(f"     Key: {key[:4]}***")
 
@@ -42,6 +44,7 @@ def main():
     except Exception as e:
         print(f"[FAIL] Connection test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

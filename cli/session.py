@@ -4,6 +4,7 @@ CLI session management for Agent Forge.
 Manages session lifecycle, organization scoping, and lock acquisition.
 """
 
+import contextlib
 import time
 import uuid
 from dataclasses import dataclass
@@ -81,7 +82,7 @@ class SessionManager:
         session_id = str(uuid.uuid4())
 
         # Create session record
-        session_record = self.internal_client.insert(
+        self.internal_client.insert(
             "sessions",
             {
                 "session_id": session_id,
@@ -162,16 +163,17 @@ class SessionManager:
 
         # Release lock if held
         if self.active_session.lock_info:
-            try:
+            # Best effort: a lock that cannot be released here expires on its
+            # own, and failing to end the session would be worse.
+            with contextlib.suppress(Exception):
                 self.org_lock.release(
                     self.active_session.lock_info.organization_id,
                     self.active_session.session_id,
                 )
-            except Exception:
-                pass  # Best effort
 
-        # Update session record
-        try:
+        # Update session record. Best effort: the session is ending either way,
+        # and a store write failure must not leave it stuck open in memory.
+        with contextlib.suppress(Exception):
             self.internal_client.update(
                 "sessions",
                 {"session_id": self.active_session.session_id},
@@ -180,8 +182,6 @@ class SessionManager:
                     "end_reason": resolved_reason,
                 },
             )
-        except Exception:
-            pass  # Best effort
 
         self.active_session = None
 

@@ -9,7 +9,11 @@ Tests cover:
 - Secret scanning
 """
 
+import pytest
+
 from agents.make_agent.validator import MakeValidator
+
+pytestmark = pytest.mark.unit
 
 
 class TestMakeBlueprintValidator:

@@ -24,7 +24,8 @@ from orchestrator.approval import (
     record_approval_decision,
     verify_approval_matches_proposal,
 )
-from orchestrator.intake_schema import normalize_intake, validate_intake
+from orchestrator.current_state_reader import CurrentStateReader, StaleStateReadError
+from orchestrator.intake_schema import detect_changes, normalize_intake, validate_intake
 from orchestrator.planner import Planner
 from orchestrator.state_machine import DeploymentState, DeploymentStateMachine
 from shared.errors import (
@@ -32,7 +33,7 @@ from shared.errors import (
     ConflictError,
     ValidationError,
 )
-from shared.hashing import hash_json
+from shared.hashing import compute_state_version, hash_json
 
 
 class Orchestrator:
@@ -53,6 +54,17 @@ class Orchestrator:
         self.internal_store = internal_store
         self.state_machine = DeploymentStateMachine()
         self.prompts = InteractivePrompts()
+        # Constructed lazily: CurrentStateReader builds every platform adapter,
+        # which resolves credentials. Only update actions need it, so a
+        # create-only deployment should not have to be fully credentialed.
+        self._state_reader: CurrentStateReader | None = None
+
+    @property
+    def state_reader(self) -> CurrentStateReader:
+        """Platform state reader, built on first use."""
+        if self._state_reader is None:
+            self._state_reader = CurrentStateReader()
+        return self._state_reader
 
     def dry_run(self, intake: dict[str, Any]) -> dict[str, Any]:
         """Build a validated onboarding preview without reading or writing services.
@@ -153,10 +165,26 @@ class Orchestrator:
         for i, proposed_action in enumerate(proposed_actions):
             print(f"\n--- Action {i + 1} of {len(proposed_actions)} ---")
 
-            # Check staleness
-            if self._is_action_stale(proposed_action):
-                print("⚠️  Action is stale. Regenerating with current state...")
-                proposed_action = self._regenerate_action(proposed_action, deployment)
+            # Read authoritative current state immediately before the write and
+            # compare against what this action was planned against.
+            current_state = self._read_current_state_for_action(proposed_action)
+            if check_staleness(
+                proposed_action,
+                None if current_state is None else compute_state_version(current_state),
+            ):
+                rebound = self._handle_stale_action(
+                    deployment_id=deployment_id,
+                    proposed_action=proposed_action,
+                    current_state=current_state or {},
+                    auto_approve=auto_approve,
+                )
+                if rebound is None:
+                    return {
+                        "status": "aborted",
+                        "message": "Deployment stopped: remote state changed since planning",
+                        "completed_actions": len(results),
+                    }
+                proposed_action = rebound
 
             # Display and request approval
             display_content = format_proposal_display(proposed_action)
@@ -233,31 +261,69 @@ class Orchestrator:
             "completed_actions": len(results),
         }
 
-    def _check_staleness_for_action(
+    # Update operations that carry a state_version, mapped to the resource
+    # identity needed to re-read that state. The payload key is written by
+    # cli.main._build_update_actions.
+    _STALENESS_TARGETS: dict[tuple[str, str], tuple[str, str]] = {
+        ("vapi", "update_assistant"): ("assistant", "assistant_id"),
+        ("make", "update_scenario_blueprint"): ("scenario", "scenario_id"),
+    }
+
+    def _read_current_state_for_action(
         self,
         proposed_action: ProposedAction,
-    ) -> str | None:
+    ) -> dict[str, Any] | None:
         """
-        Read authoritative current state and compute state version.
+        Read authoritative current state for a proposed action.
 
-        This implements the staleness check requirement: read current state
-        immediately before write, compute state hash, and compare.
+        Implements the read-before-write requirement: the remote resource is
+        re-read immediately before the write so the operator approves against
+        what is actually there, not against what was there at plan time.
 
         Args:
             proposed_action: The proposed action
 
         Returns:
-            Current state version (hash) or None if not applicable
+            Current state projection, or None for create operations that have
+            no prior state to be stale against.
+
+        Raises:
+            StaleStateReadError: If the read fails. A failed read means the
+                remote state is unknown, which must never be reported as
+                unchanged.
         """
-        # Only applicable for update operations
         if not proposed_action.state_version:
             return None
 
-        # Read current state based on platform and operation
-        # This would call the appropriate adapter get method
-        # For now, return None to indicate no staleness check needed
-        # TODO: Implement platform-specific state reads
-        return None
+        key = (proposed_action.platform, proposed_action.operation)
+        target = self._STALENESS_TARGETS.get(key)
+        if target is None:
+            raise StaleStateReadError(
+                f"Action {proposed_action.platform}/{proposed_action.operation} carries a "
+                "state_version but has no staleness target defined; cannot verify it is current."
+            )
+
+        resource_type, payload_key = target
+        remote_id = proposed_action.payload.get(payload_key)
+        if not remote_id:
+            raise StaleStateReadError(
+                f"Action {proposed_action.platform}/{proposed_action.operation} is missing "
+                f"'{payload_key}' in its payload; cannot re-read current state."
+            )
+
+        return self.state_reader.read_staleness_state(
+            proposed_action.platform, resource_type, str(remote_id)
+        )
+
+    def _check_staleness_for_action(
+        self,
+        proposed_action: ProposedAction,
+    ) -> str | None:
+        """Read current state and return its version hash (None for creates)."""
+        current_state = self._read_current_state_for_action(proposed_action)
+        if current_state is None:
+            return None
+        return compute_state_version(current_state)
 
     def _is_action_stale(self, proposed_action: ProposedAction) -> bool:
         """
@@ -457,6 +523,7 @@ class Orchestrator:
             phone_number_id = payload.get("phone_number_id")
             if phone_number_id and receipt.remote_id:
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     adapter.assign_phone_number(phone_number_id, receipt.remote_id)
             return receipt
@@ -520,6 +587,7 @@ class Orchestrator:
             )
             if receipt.remote_id:
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     adapter.activate_scenario(int(receipt.remote_id))
             return receipt
@@ -638,10 +706,19 @@ class Orchestrator:
             ],
         }
 
-    def _regenerate_action(
-        self, proposed_action: ProposedAction, deployment: dict[str, Any]
+    def _rebind_action_to_current_state(
+        self,
+        proposed_action: ProposedAction,
+        current_state: dict[str, Any],
     ) -> ProposedAction:
-        """Regenerate action with fresh state version and idempotency key."""
+        """
+        Rebind an action to freshly-read state after the operator accepts drift.
+
+        The payload is unchanged — the operator has just been shown exactly what
+        it will overwrite and chosen to proceed. What changes is the binding:
+        a new state_version and idempotency key, so the approval that follows is
+        bound to the current state rather than the stale one.
+        """
         from orchestrator.approval import build_proposed_action as _build
         from shared.ids import generate_uuid
 
@@ -650,14 +727,88 @@ class Orchestrator:
             operation=proposed_action.operation,
             target=proposed_action.target,
             payload=proposed_action.payload,
-            state_version=None,
+            state_version=compute_state_version(current_state),
             idempotency_key=generate_uuid(),
             retry_policy=proposed_action.retry_policy,
             reconciliation_strategy=proposed_action.reconciliation_strategy,
             compensation_operation=proposed_action.compensation_operation,
             validation_result=proposed_action.validation_result,
             expected_outcome=proposed_action.expected_outcome,
+            baseline_state=current_state,
         )
+
+    def _handle_stale_action(
+        self,
+        deployment_id: str,
+        proposed_action: ProposedAction,
+        current_state: dict[str, Any],
+        auto_approve: bool,
+    ) -> ProposedAction | None:
+        """
+        Show the operator what changed remotely and let them decide.
+
+        Args:
+            deployment_id: Deployment identifier
+            proposed_action: The stale action
+            current_state: Freshly-read state projection
+            auto_approve: Whether the run is in auto-approve mode
+
+        Returns:
+            An action rebound to current state if the operator proceeds, or
+            None if the deployment should abort.
+        """
+        drift = detect_changes(proposed_action.baseline_state or {}, current_state)
+
+        # Record the detection itself, not just the operator's answer: the fact
+        # that state moved between planning and writing is the auditable event.
+        self.internal_store.append_audit_event(
+            deployment_id=deployment_id,
+            event_type="action_executing",
+            status="stale_detected",
+            subject=proposed_action.target,
+            detail={
+                "platform": proposed_action.platform,
+                "operation": proposed_action.operation,
+                "drifted_fields": sorted(drift.keys()),
+            },
+        )
+
+        self.prompts.display_warning(
+            f"Remote state changed since this action was planned.\n"
+            f"  {proposed_action.platform}/{proposed_action.operation} → {proposed_action.target}"
+        )
+        if drift:
+            print("\nChanged remotely since planning:")
+            for field, change in drift.items():
+                print(f"  • {field}: {change['from']!r} → {change['to']!r}")
+        print("\nProceeding will overwrite the remote changes shown above.\n")
+
+        # Auto-approve exists for CI, where nobody is watching. Silently
+        # overwriting a concurrent edit is exactly what this check exists to
+        # prevent, so this is the one decision auto-approve may not make.
+        if auto_approve:
+            self.prompts.display_error(
+                "Auto-approve cannot resolve concurrent modification. Aborting deployment."
+            )
+            self._abort_deployment(deployment_id, "Stale action detected under --auto-approve")
+            return None
+
+        choice = self.prompts.choose_recovery_option(["proceed", "abort", "revise"])
+
+        if choice == "proceed":
+            return self._rebind_action_to_current_state(proposed_action, current_state)
+
+        if choice == "revise":
+            revision_notes = self.prompts.get_revision_instruction()
+            self._mark_for_revision(
+                deployment_id=deployment_id,
+                action_index=-1,
+                revision_notes=f"Stale state: {revision_notes}",
+            )
+            return None
+
+        self._abort_deployment(deployment_id, "Operator aborted after drift detected")
+        return None
 
     def _action_to_dict(self, proposed_action: ProposedAction) -> dict[str, Any]:
         """Convert ProposedAction to dictionary for display."""

@@ -123,9 +123,7 @@ class MakeAdapter:
                 raise ConflictError(f"HTTP {response.status_code}: Conflict")
             elif response.status_code == 429:
                 retry_after = response.headers.get("Retry-After", "unknown")
-                raise TransientError(
-                    f"HTTP 429: Rate limited (Retry-After: {retry_after})"
-                )
+                raise TransientError(f"HTTP 429: Rate limited (Retry-After: {retry_after})")
             elif response.status_code >= 500:
                 raise TransientError(f"HTTP {response.status_code}: Server error")
             elif response.status_code >= 400:
@@ -198,7 +196,15 @@ class MakeAdapter:
             "designer": {"orphans": []},
         }
 
-        valid_types = ["immediately", "indefinitely", "once", "daily", "weekly", "monthly", "yearly"]
+        valid_types = [
+            "immediately",
+            "indefinitely",
+            "once",
+            "daily",
+            "weekly",
+            "monthly",
+            "yearly",
+        ]
         if scheduling.get("type") not in valid_types:
             scheduling = {"type": "immediately"}
 

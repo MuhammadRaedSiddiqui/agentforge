@@ -7,6 +7,7 @@ NOTE: This test requires a configured internal Supabase instance.
 Run with: pytest tests/integration/test_internal_store.py -m integration
 """
 
+import contextlib
 import os
 from datetime import datetime
 from uuid import uuid4
@@ -60,10 +61,8 @@ class TestInternalStore:
 
         finally:
             # Cleanup
-            try:
+            with contextlib.suppress(Exception):
                 client.delete("organizations", {"organization_id": org_id})
-            except Exception:
-                pass
 
     def test_insert_intake(self, client: SupabaseInternalClient) -> None:
         """Should insert an organization intake."""

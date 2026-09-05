@@ -154,9 +154,12 @@ class PackageAssembler:
         """Extract organization ID from task context."""
         # Organization ID should be in task constraints or context
         for task in tasks:
-            if hasattr(task, "constraints") and isinstance(task.constraints, dict):
-                if "organization_id" in task.constraints:
-                    return task.constraints["organization_id"]
+            if (
+                hasattr(task, "constraints")
+                and isinstance(task.constraints, dict)
+                and "organization_id" in task.constraints
+            ):
+                return task.constraints["organization_id"]
         return ""
 
     def _check_completeness(
@@ -326,7 +329,7 @@ class PackageAssembler:
             if org_id != expected_org_id:
                 foreign_ids.add(org_id)
 
-        return sorted(list(foreign_ids))
+        return sorted(foreign_ids)
 
     def _check_duplicates(self, results: list[ResultObject]) -> list[str]:
         """Check for duplicate task IDs in results."""
@@ -423,9 +426,7 @@ class PackageAssembler:
         Returns:
             True if within limits, False if escalation required
         """
-        if attempt_count >= self.max_corrections_per_field:
-            return False
-        return True
+        return not attempt_count >= self.max_corrections_per_field
 
     def assemble_deployment_record(
         self,

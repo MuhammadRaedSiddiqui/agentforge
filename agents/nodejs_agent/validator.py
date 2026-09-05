@@ -175,16 +175,17 @@ class NodeJsValidator:
                     )
 
             # Check for global middleware changes (app.use without org context)
-            if "app.use(" in line and expected_org_id not in line:
-                if line.startswith("+") or line.startswith("-"):
-                    errors.append(f"Line {i + 1}: Global middleware change detected")
+            if "app.use(" in line and expected_org_id not in line and line.startswith(("+", "-")):
+                errors.append(f"Line {i + 1}: Global middleware change detected")
 
             # Check for changes to routes not belonging to this org
-            if re.search(r"app\.(post|get|put|delete)", line):
-                if expected_org_id not in line and not line.strip().startswith("//"):
-                    # It's a route change not for this org
-                    if line.startswith("+") or line.startswith("-"):
-                        errors.append(f"Line {i + 1}: Unrelated route modification")
+            if (
+                re.search(r"app\.(post|get|put|delete)", line)
+                and expected_org_id not in line
+                and not line.strip().startswith("//")
+                and line.startswith(("+", "-"))
+            ):
+                errors.append(f"Line {i + 1}: Unrelated route modification")
 
         return errors
 

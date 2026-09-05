@@ -180,7 +180,7 @@ def redact_dict(data: dict[str, Any], sensitive_keys: list[str] | None = None) -
         "anon_key",
     ]
 
-    all_sensitive = set(k.lower() for k in default_sensitive + sensitive_keys)
+    all_sensitive = {k.lower() for k in default_sensitive + sensitive_keys}
 
     redacted: dict[str, Any] = {}
     for key, value in data.items():

@@ -11,7 +11,6 @@ from orchestrator.dialogue_engine import (
 )
 from orchestrator.intake_extractor import apply_extraction, extract_from_conversation
 
-
 SYSTEM_PROMPT_PATH = Path(__file__).parent.parent / "memory" / "orchestrator_system_prompt.md"
 
 
@@ -38,9 +37,7 @@ class ConversationAgent:
             "details you have. I'll ask for anything missing."
         )
 
-    def turn(
-        self, user_message: str, state: ConversationState
-    ) -> tuple[str, ConversationState]:
+    def turn(self, user_message: str, state: ConversationState) -> tuple[str, ConversationState]:
         """
         Process one user turn. Returns (response_text, updated_state).
         """
@@ -113,13 +110,15 @@ class ConversationAgent:
                 messages.append({"role": role, "content": content})
 
         if next_q:
-            messages.append({
-                "role": "system",
-                "content": (
-                    f"[Internal guidance] The next missing required field needs this question: "
-                    f"{next_q}. Ask naturally — do not quote this guidance verbatim."
-                ),
-            })
+            messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        f"[Internal guidance] The next missing required field needs this question: "
+                        f"{next_q}. Ask naturally — do not quote this guidance verbatim."
+                    ),
+                }
+            )
 
         try:
             response = self.model.create_completion(
@@ -145,9 +144,7 @@ class ConversationAgent:
             "availability": "check availability",
             "human_transfer": "transfer to a human agent",
         }
-        cap_lines = "\n".join(
-            f"  - {caps_display.get(c, c)}" for c in (p.capabilities or [])
-        )
+        cap_lines = "\n".join(f"  - {caps_display.get(c, c)}" for c in (p.capabilities or []))
 
         return (
             f"Here's what I'll build for {p.business_name}:\n\n"
@@ -191,7 +188,8 @@ class ConversationAgent:
             "phone_number": p.phone_number,
             "voice_id": p.voice_id,
             "timezone": p.timezone or "America/New_York",
-            "business_hours": p.business_hours or {
+            "business_hours": p.business_hours
+            or {
                 "monday": [{"open": "09:00", "close": "17:00"}],
                 "tuesday": [{"open": "09:00", "close": "17:00"}],
                 "wednesday": [{"open": "09:00", "close": "17:00"}],
@@ -224,8 +222,17 @@ class ConversationAgent:
     @staticmethod
     def _is_confirmation(text: str) -> bool:
         affirmatives = {
-            "yes", "y", "yep", "yeah", "correct", "proceed",
-            "go ahead", "looks good", "confirmed", "ok", "okay",
+            "yes",
+            "y",
+            "yep",
+            "yeah",
+            "correct",
+            "proceed",
+            "go ahead",
+            "looks good",
+            "confirmed",
+            "ok",
+            "okay",
         }
         return text.strip().lower() in affirmatives
 

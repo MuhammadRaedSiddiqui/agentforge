@@ -91,7 +91,9 @@ class MakeAgent:
             "organization_display_name": organization_display_name,
             "make_team_id": make_team_id,
             f"{capability}_hook_id": f"{{HOOK_{capability.upper()}_ID}}",  # Runtime placeholder
-            "supabase_connection_id": os.getenv("MAKE_SUPABASE_CONNECTION_ID", "{{SUPABASE_CONNECTION_ID}}"),
+            "supabase_connection_id": os.getenv(
+                "MAKE_SUPABASE_CONNECTION_ID", "{{SUPABASE_CONNECTION_ID}}"
+            ),
         }
 
         # Parameterize blueprint

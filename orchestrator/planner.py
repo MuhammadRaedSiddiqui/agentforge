@@ -508,7 +508,7 @@ class Planner:
         """Create expected outputs list."""
         outputs = []
 
-        for task_id, node in graph.tasks.items():
+        for _task_id, node in graph.tasks.items():
             if node.expected_output:
                 outputs.append(
                     {

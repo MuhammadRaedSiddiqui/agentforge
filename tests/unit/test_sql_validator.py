@@ -9,7 +9,11 @@ Tests cover:
 - Safe migration patterns
 """
 
+import pytest
+
 from agents.supabase_agent.validator import SqlValidator
+
+pytestmark = pytest.mark.unit
 
 
 class TestSqlMigrationValidator:

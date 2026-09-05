@@ -1,5 +1,7 @@
 """Unit tests for orchestrator/dialogue_engine.py"""
 
+import pytest
+
 from orchestrator.conversation_state import PartialIntakeData
 from orchestrator.dialogue_engine import (
     FIELD_QUESTIONS,
@@ -7,6 +9,8 @@ from orchestrator.dialogue_engine import (
     handle_voice_suggestion_request,
     next_question,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestNextQuestion:
@@ -20,10 +24,10 @@ class TestNextQuestion:
         )
         assert next_question(partial) is None
 
-    def test_asks_capabilities_first_when_all_missing(self) -> None:
+    def test_asks_business_name_first_when_all_missing(self) -> None:
         partial = PartialIntakeData()
         result = next_question(partial)
-        assert result == FIELD_QUESTIONS["capabilities"]
+        assert result == FIELD_QUESTIONS["business_name"]
 
     def test_asks_capabilities_when_only_name_given(self) -> None:
         partial = PartialIntakeData(
@@ -60,7 +64,9 @@ class TestNextQuestion:
             capabilities=["booking"],
         )
         result = next_question(partial)
-        assert "org" in result.lower() or "identifier" in result.lower() or "org id" in result.lower()
+        assert (
+            "org" in result.lower() or "identifier" in result.lower() or "org id" in result.lower()
+        )
 
     def test_asks_business_name_when_only_missing_required(self) -> None:
         partial = PartialIntakeData(

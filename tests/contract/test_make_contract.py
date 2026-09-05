@@ -23,6 +23,8 @@ from shared.errors import (
     ValidationError,
 )
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture
 def make_adapter() -> MakeAdapter:

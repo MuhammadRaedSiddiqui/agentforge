@@ -238,13 +238,10 @@ class BaseHTTPAdapter:
         if not is_read_only and failure_class == "ambiguous_outcome":
             return False
 
-        # Retry transient failures for proven idempotent operations
-        # (caller must explicitly mark as idempotent)
-        if failure_class == "transient":
-            return True
-
-        # Don't retry permanent, authorization, or conflict errors
-        return False
+        # Retry transient failures for proven idempotent operations (caller must
+        # explicitly mark as idempotent); never retry permanent, authorization,
+        # or conflict errors.
+        return failure_class == "transient"
 
     def _make_request(
         self,

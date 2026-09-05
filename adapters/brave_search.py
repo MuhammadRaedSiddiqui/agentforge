@@ -5,9 +5,6 @@ Uses DuckDuckGo HTML search (no API key required) as a read-only fallback
 for the information agent when internal knowledge doesn't have an answer.
 """
 
-from typing import Any
-from urllib.parse import quote_plus
-
 import requests
 
 from adapters.base import AdapterReceipt
@@ -33,9 +30,7 @@ class BraveSearchAdapter:
     def __init__(self) -> None:
         """Initialize DuckDuckGo search adapter."""
         self.session = requests.Session()
-        self.session.headers.update(
-            {"User-Agent": "AgentForge/1.0 (troubleshooting fallback)"}
-        )
+        self.session.headers.update({"User-Agent": "AgentForge/1.0 (troubleshooting fallback)"})
 
     def web_search(
         self,
@@ -93,30 +88,26 @@ class BraveSearchAdapter:
             )
 
         except requests.Timeout as e:
-            raise TransientError(f"Request timeout: {e}")
+            raise TransientError(f"Request timeout: {e}") from e
         except requests.ConnectionError as e:
-            raise TransientError(f"Connection error: {e}")
+            raise TransientError(f"Connection error: {e}") from e
         except (TransientError, PermanentError):
             raise
         except requests.RequestException as e:
-            raise PermanentError(f"Request failed: {e}")
+            raise PermanentError(f"Request failed: {e}") from e
 
     def _parse_html_results(self, html: str, max_results: int) -> list[dict[str, str]]:
         """Parse DuckDuckGo lite HTML into structured results."""
         import re
-        from urllib.parse import unquote, urlparse, parse_qs
+        from urllib.parse import parse_qs, unquote, urlparse
 
         results: list[dict[str, str]] = []
 
         # DDG lite uses redirect links: //duckduckgo.com/l/?uddg=<encoded_url>
-        link_pattern = re.compile(
-            r'<a\s+rel="nofollow"\s+href="([^"]+)"[^>]*>([^<]+)</a>'
-        )
+        link_pattern = re.compile(r'<a\s+rel="nofollow"\s+href="([^"]+)"[^>]*>([^<]+)</a>')
 
         # Find snippet rows (text after the link in a <td class="result-snippet">)
-        snippet_pattern = re.compile(
-            r'class="result-snippet"[^>]*>(.*?)</td>', re.DOTALL
-        )
+        snippet_pattern = re.compile(r'class="result-snippet"[^>]*>(.*?)</td>', re.DOTALL)
 
         links = link_pattern.findall(html)
         snippets = snippet_pattern.findall(html)
@@ -151,9 +142,7 @@ class BraveSearchAdapter:
                 )
 
             if title and actual_url and not actual_url.startswith("//duckduckgo"):
-                results.append(
-                    {"title": title, "url": actual_url, "description": snippet}
-                )
+                results.append({"title": title, "url": actual_url, "description": snippet})
 
             if len(results) >= max_results:
                 break

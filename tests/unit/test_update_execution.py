@@ -1,5 +1,6 @@
 """Tests for the update execution flow."""
 
+from unittest.mock import Mock
 
 import pytest
 
@@ -64,6 +65,7 @@ class TestUpdateFlow:
 
     def test_build_update_actions_vapi(self):
         import sys
+
         sys.path.insert(0, ".")
         from cli.main import _build_update_actions
         from shared.task_object import TaskObject
@@ -81,21 +83,32 @@ class TestUpdateFlow:
         )
 
         current_state = {
-            "platforms": {
-                "vapi": {
-                    "assistants": [{"id": "asst-123", "name": "Old Name"}]
-                }
-            }
+            "platforms": {"vapi": {"assistants": [{"id": "asst-123", "name": "Old Name"}]}}
         }
         changes = {"name": {"from": "Old Name", "to": "New Name"}}
 
-        actions = _build_update_actions([task], "org-test", changes, current_state)
+        # Update actions record the remote state they were planned against, so
+        # the builder needs a state reader. Inject a fake rather than letting it
+        # construct one that would call Vapi.
+        baseline = {"name": "Old Name", "model": None, "voice": None, "first_message": None}
+        reader = Mock()
+        reader.read_staleness_state = Mock(return_value=baseline)
+
+        actions = _build_update_actions(
+            [task], "org-test", changes, current_state, state_reader=reader
+        )
 
         assert len(actions) == 1
         assert actions[0].platform == "vapi"
         assert actions[0].operation == "update_assistant"
         assert actions[0].payload["assistant_id"] == "asst-123"
         assert actions[0].payload["updates"]["name"] == "New Name"
+
+        # The action must be bound to the state it was planned against, or the
+        # pre-write staleness check has nothing to compare.
+        assert actions[0].state_version is not None
+        assert actions[0].baseline_state == baseline
+        reader.read_staleness_state.assert_called_once_with("vapi", "assistant", "asst-123")
 
     def test_build_update_actions_empty_state(self):
         from cli.main import _build_update_actions

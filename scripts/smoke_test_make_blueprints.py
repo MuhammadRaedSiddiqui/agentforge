@@ -43,11 +43,13 @@ def main() -> int:
                 hook_name=f"smoke-{capability}",
                 connection_id=connection_id,
             )
-            print(f"  OK: scenario_id={result['scenario_id']} "
-                  f"hook_id={result['hook_id']} "
-                  f"module_count={result['module_count']} "
-                  f"activated={result['activated']} "
-                  f"fallback={result['used_fallback']}")
+            print(
+                f"  OK: scenario_id={result['scenario_id']} "
+                f"hook_id={result['hook_id']} "
+                f"module_count={result['module_count']} "
+                f"activated={result['activated']} "
+                f"fallback={result['used_fallback']}"
+            )
             results.append(result)
         except PermanentError as e:
             failures += 1

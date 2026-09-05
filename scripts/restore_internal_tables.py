@@ -170,7 +170,7 @@ def restore_table(
         # Insert rows preserving IDs and timestamps
         if rows:
             try:
-                response = client.supabase.table(table_name).insert(rows).execute()
+                client.supabase.table(table_name).insert(rows).execute()
                 print(f"    ✓ Restored {len(rows)} rows")
             except Exception as e:
                 print(f"    ✗ Error restoring {table_name}: {e}")

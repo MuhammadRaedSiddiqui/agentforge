@@ -10,7 +10,11 @@ Tests cover:
 
 from typing import Any
 
+import pytest
+
 from agents.vapi_agent.validator import VapiValidator
+
+pytestmark = pytest.mark.unit
 
 
 class TestVapiAssistantConfigValidator:

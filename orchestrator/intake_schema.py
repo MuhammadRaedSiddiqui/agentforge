@@ -189,9 +189,8 @@ def validate_intake(intake: dict[str, Any]) -> dict[str, Any]:
                 errors.append(f"Unknown capability: {cap}")
 
     # Validate capability-specific required fields
-    if "booking" in capabilities:
-        if not intake.get("booking_calendar_id"):
-            errors.append("booking_calendar_id is required when booking capability is enabled")
+    if "booking" in capabilities and not intake.get("booking_calendar_id"):
+        errors.append("booking_calendar_id is required when booking capability is enabled")
 
     if "cancellation" in capabilities:
         if "cancellation_window_hours" not in intake:
@@ -203,9 +202,8 @@ def validate_intake(intake: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(window, int) or window < 0:
                 errors.append("cancellation_window_hours must be a non-negative integer")
 
-    if "rescheduling" in capabilities:
-        if not intake.get("rescheduling_policy"):
-            errors.append("rescheduling_policy is required when rescheduling capability is enabled")
+    if "rescheduling" in capabilities and not intake.get("rescheduling_policy"):
+        errors.append("rescheduling_policy is required when rescheduling capability is enabled")
 
     if "human_transfer" in capabilities:
         if not intake.get("transfer_destination"):
