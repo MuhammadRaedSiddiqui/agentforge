@@ -1,3 +1,4 @@
+import copy
 import os
 import uuid
 from pathlib import Path
@@ -12,6 +13,42 @@ from orchestrator.dialogue_engine import (
 from orchestrator.intake_extractor import apply_extraction, extract_from_conversation
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent.parent / "memory" / "orchestrator_system_prompt.md"
+
+# Substituted when extraction does not capture these optional fields. Defined
+# once so the plan summary and the confirmed intake cannot disagree about what
+# a default is — a summary that describes different hours from the ones that
+# deploy is worse than no summary at all.
+DEFAULT_TIMEZONE = "America/New_York"
+_WEEKDAY_HOURS = [{"open": "09:00", "close": "17:00"}]
+DEFAULT_BUSINESS_HOURS: dict[str, list[dict[str, str]]] = {
+    "monday": _WEEKDAY_HOURS,
+    "tuesday": _WEEKDAY_HOURS,
+    "wednesday": _WEEKDAY_HOURS,
+    "thursday": _WEEKDAY_HOURS,
+    "friday": _WEEKDAY_HOURS,
+    "saturday": [],
+    "sunday": [],
+}
+
+_DAY_ORDER = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def format_business_hours(hours: dict[str, Any]) -> str:
+    """Render business hours for operator review, closed days included.
+
+    Closed days are listed rather than omitted: the failure this guards against
+    is a day being dropped, and a day that is simply absent from the summary
+    reads the same as one that was never mentioned.
+    """
+    lines = []
+    for day in _DAY_ORDER:
+        windows = hours.get(day) or []
+        if windows:
+            spans = ", ".join(f"{w.get('open')}-{w.get('close')}" for w in windows)
+        else:
+            spans = "closed"
+        lines.append(f"      {day.capitalize():<10} {spans}")
+    return "\n".join(lines)
 
 
 class ConversationAgent:
@@ -135,6 +172,11 @@ class ConversationAgent:
     def _build_plan_summary(self, state: ConversationState) -> str:
         """
         Presents the deployment plan in plain language for user confirmation.
+
+        Shows timezone and business hours, and marks either as a default when
+        extraction did not capture it. Both are optional fields, so a failed
+        extraction silently substitutes a default; without saying so here, the
+        operator confirms a plan that does not describe what actually deploys.
         """
         p = state.partial_intake
         caps_display: dict[str, str] = {
@@ -146,12 +188,19 @@ class ConversationAgent:
         }
         cap_lines = "\n".join(f"  - {caps_display.get(c, c)}" for c in (p.capabilities or []))
 
+        timezone = p.timezone or DEFAULT_TIMEZONE
+        tz_note = "" if p.timezone else "   (default — I did not catch a timezone)"
+        hours = p.business_hours or DEFAULT_BUSINESS_HOURS
+        hours_note = "" if p.business_hours else "   (default — I did not catch opening hours)"
+
         return (
             f"Here's what I'll build for {p.business_name}:\n\n"
             f"  - A Vapi voice assistant ({p.voice_id} voice) on {p.phone_number}\n"
             f"  - Automation scenarios:\n{cap_lines}\n"
             f"  - A Supabase tenant record for this client\n"
-            f"  - Backend webhook routes for each capability\n\n"
+            f"  - Backend webhook routes for each capability\n"
+            f"  - Timezone: {timezone}{tz_note}\n"
+            f"  - Hours:{hours_note}\n{format_business_hours(hours)}\n\n"
             f"Type 'yes' to proceed, or tell me what to change."
         )
 
@@ -189,17 +238,11 @@ class ConversationAgent:
             "business_name": p.business_name,
             "phone_number": p.phone_number,
             "voice_id": p.voice_id,
-            "timezone": p.timezone or "America/New_York",
-            "business_hours": p.business_hours
-            or {
-                "monday": [{"open": "09:00", "close": "17:00"}],
-                "tuesday": [{"open": "09:00", "close": "17:00"}],
-                "wednesday": [{"open": "09:00", "close": "17:00"}],
-                "thursday": [{"open": "09:00", "close": "17:00"}],
-                "friday": [{"open": "09:00", "close": "17:00"}],
-                "saturday": [],
-                "sunday": [],
-            },
+            "timezone": p.timezone or DEFAULT_TIMEZONE,
+            # Deep-copied: DEFAULT_BUSINESS_HOURS is module-level and shares one
+            # list object across the five weekdays, so handing it out directly
+            # would let a downstream mutation rewrite the default for the process.
+            "business_hours": p.business_hours or copy.deepcopy(DEFAULT_BUSINESS_HOURS),
             "services_offered": [
                 {
                     "name": "General Appointment",
