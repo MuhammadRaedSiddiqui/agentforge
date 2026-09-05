@@ -104,8 +104,8 @@ class ConversationAgent:
             role = msg.get("role", "user")
             if role == "model":
                 role = "assistant"
-            parts = msg.get("parts", [])
-            content = parts[0] if parts else ""
+            parts = msg.get("parts")
+            content = parts[0] if isinstance(parts, list) and parts else ""
             if isinstance(content, str):
                 messages.append({"role": role, "content": content})
 
@@ -168,7 +168,9 @@ class ConversationAgent:
         p = state.partial_intake
         capabilities = p.capabilities or []
 
-        capability_defaults: dict[str, dict[str, object]] = {}
+        # Heterogeneous by design: these are spread into `intake` below, where a
+        # default may be a str, an int, or a nested policy dict.
+        capability_defaults: dict[str, object] = {}
         if "booking" in capabilities:
             capability_defaults["booking_calendar_id"] = "pending-setup"
         if "cancellation" in capabilities:

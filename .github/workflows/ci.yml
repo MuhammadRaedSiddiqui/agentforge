@@ -18,16 +18,12 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install ruff>=0.1.0
-      - name: Lint changed files (PR only)
-        if: github.event_name == 'pull_request'
-        run: |
-          git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD -- '*.py' | xargs -r ruff check
-      - name: Lint all (push to master)
-        if: github.event_name == 'push'
-        continue-on-error: true
-        run: ruff check .
+      # The tree is clean, so both events lint everything. The old
+      # changed-files-only path on PRs existed to avoid failing on the 114
+      # pre-existing errors; that reason is gone, and linting only the diff
+      # would miss an error introduced in a file the PR did not touch.
+      - run: ruff check .
       - run: ruff format --check .
-        continue-on-error: true
 
   typecheck:
     runs-on: ubuntu-latest
@@ -40,9 +36,11 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt mypy types-requests types-pyyaml
+      # No --ignore-missing-imports: pyproject lists the specific third-party
+      # modules that ship no stubs, so a newly added untyped import surfaces
+      # here instead of being silently waived for the whole tree.
       - name: Type check
-        continue-on-error: true
-        run: mypy --ignore-missing-imports --no-error-summary adapters/ orchestrator/ shared/ agents/ cli/
+        run: mypy adapters/ orchestrator/ shared/ agents/ cli/
 
   test:
     runs-on: ubuntu-latest

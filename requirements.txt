@@ -2,8 +2,7 @@
 # Pinned minimum versions for bootstrap
 # Lock exact versions after Phase 0 smoke tests pass
 
-# Agent orchestration
-openai-agents>=0.0.4
+# Model client (OpenAI-compatible providers)
 openai>=1.60.0
 
 # Knowledge retrieval
