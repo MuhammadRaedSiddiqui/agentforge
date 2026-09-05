@@ -23,6 +23,7 @@ from adapters.make import MakeAdapter
 from adapters.supabase_client import SupabaseClientAdapter
 from adapters.supabase_internal import SupabaseInternalClient
 from adapters.vapi import VapiAdapter
+from shared.console import enable_utf8_output
 
 
 class DeploymentReconciler:
@@ -558,4 +559,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    enable_utf8_output()
     main()

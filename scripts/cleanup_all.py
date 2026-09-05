@@ -47,6 +47,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from dotenv import load_dotenv  # noqa: E402  (needs REPO_ROOT on sys.path first)
 
+from shared.console import enable_utf8_output  # noqa: E402  (needs REPO_ROOT on sys.path first)
+
 load_dotenv(REPO_ROOT / ".env")
 
 # Windows console: force UTF-8 so box-drawing / emoji don't raise cp1252 errors
@@ -701,4 +703,5 @@ examples:
 
 
 if __name__ == "__main__":
+    enable_utf8_output()
     sys.exit(main())

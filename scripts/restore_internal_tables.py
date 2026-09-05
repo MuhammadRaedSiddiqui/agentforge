@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from adapters.supabase_internal import SupabaseInternalClient
 from scripts.export_internal_tables import TABLES, compute_file_hash
+from shared.console import enable_utf8_output
 
 
 def validate_manifest(manifest_path: Path) -> dict[str, Any]:
@@ -414,4 +415,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    enable_utf8_output()
     main()

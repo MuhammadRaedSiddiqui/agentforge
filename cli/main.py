@@ -27,6 +27,7 @@ from orchestrator.intake_schema import normalize_intake, validate_intake
 from orchestrator.orchestrator import Orchestrator
 from orchestrator.planner import Planner
 from orchestrator.template_registry import get_template_registry
+from shared.console import enable_utf8_output
 from shared.hashing import compute_state_version
 from shared.ids import generate_deployment_id
 
@@ -1772,6 +1773,10 @@ def main() -> int:
     Returns:
         Exit code
     """
+    # Before any output: the approval display uses non-ASCII glyphs, which
+    # crash on Windows the moment stdout is redirected rather than a console.
+    enable_utf8_output()
+
     parser = argparse.ArgumentParser(
         prog="agent-forge",
         description="Agent Forge - Safe client deployment automation",
