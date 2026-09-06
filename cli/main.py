@@ -32,6 +32,17 @@ from shared.console import enable_utf8_output
 from shared.hashing import compute_state_version
 from shared.ids import generate_deployment_id
 
+# Resource types `cleanup --execute` knows how to delete, and those it must
+# skip. Together these have to cover every value in
+# orchestrator.OPERATION_TO_RESOURCE_TYPE; a type in neither set would be
+# silently ignored, which is the bug this pair exists to prevent.
+DELETABLE_RESOURCE_TYPES = frozenset(
+    {"vapi_assistant", "make_scenario", "supabase_organization_row"}
+)
+# A deploy is a historical record and an env var has no adapter delete, so
+# these are reported as skipped rather than counted as deleted.
+UNDELETABLE_RESOURCE_TYPES = frozenset({"hosting_deployment", "supabase_migration"})
+
 
 def webhook_base_from_health_url(health_url: str) -> str:
     """Derive the webhook base URL from the configured health-check URL.
@@ -1480,44 +1491,58 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
                 print("Cleanup cancelled")
                 return 0
 
-            # Delete resources by platform
+            # Delete resources by platform.
+            #
+            # The resource_type strings are written by orchestrator.py when a
+            # receipt is persisted ("vapi_assistant", "make_scenario",
+            # "supabase_organization_row", "hosting_deployment"). This block
+            # previously matched "assistant" and "scenario", which never equal
+            # those, so every resource fell through and the run reported
+            # "Cleanup complete" having deleted nothing. Unrecognised types are
+            # now counted, so the summary can never claim success for work it
+            # did not do.
             deleted_count = 0
             failed_count = 0
+            skipped: list[str] = []
 
             for platform, platform_resources in by_platform.items():
                 print(f"\nDeleting {platform} resources...")
 
                 for resource in platform_resources:
+                    remote_id = resource["remote_resource_id"]
+                    resource_type = resource["resource_type"]
                     try:
-                        remote_id = resource["remote_resource_id"]
-                        resource_type = resource["resource_type"]
-
-                        # Delete based on platform
-                        if platform == "vapi":
+                        if resource_type == "vapi_assistant":
                             from adapters.vapi import VapiAdapter
 
-                            adapter = VapiAdapter()
-
-                            if resource_type == "assistant":
-                                result = adapter.delete_assistant(remote_id)
-                                if result["success"]:
-                                    print(f"  ✓ Deleted assistant {remote_id}")
-                                    deleted_count += 1
-                                else:
-                                    print(f"  ✗ Failed to delete assistant {remote_id}")
-                                    failed_count += 1
-
-                        elif platform == "make":
+                            receipt = VapiAdapter().delete_assistant(remote_id)
+                        elif resource_type == "make_scenario":
                             from adapters.make import MakeAdapter
 
-                            if resource_type == "scenario":
-                                result = MakeAdapter().delete_scenario(remote_id)
-                                if result["success"]:
-                                    print(f"  ✓ Deleted scenario {remote_id}")
-                                    deleted_count += 1
-                                else:
-                                    print(f"  ✗ Failed to delete scenario {remote_id}")
-                                    failed_count += 1
+                            # Make identifies scenarios numerically; receipts
+                            # store every remote id as a string.
+                            receipt = MakeAdapter().delete_scenario(int(remote_id))
+                        elif resource_type == "supabase_organization_row":
+                            from adapters.supabase_client import SupabaseClientAdapter
+
+                            receipt = SupabaseClientAdapter().delete_org_record(remote_id)
+                        else:
+                            # hosting_deployment covers deploys and env vars: a
+                            # deploy is a historical record, not a resource that
+                            # can be removed, and no adapter exposes a delete.
+                            skipped.append(f"{resource_type} {remote_id}")
+                            print(f"  - Skipped {resource_type} {remote_id} (no delete supported)")
+                            continue
+
+                        if receipt.status == "success":
+                            print(f"  ✓ Deleted {resource_type} {remote_id}")
+                            deleted_count += 1
+                        else:
+                            print(
+                                f"  ✗ Failed to delete {resource_type} {remote_id} "
+                                f"(status {receipt.status})"
+                            )
+                            failed_count += 1
 
                     except Exception as e:
                         print(f"  ✗ Error deleting {resource_type} {remote_id}: {e}")
@@ -1529,13 +1554,21 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
             print("=" * 60)
             print(f"Deleted: {deleted_count}")
             print(f"Failed: {failed_count}")
+            if skipped:
+                print(f"Skipped: {len(skipped)} (no delete supported)")
+                for item in skipped:
+                    print(f"  - {item}")
 
-            if failed_count == 0:
-                print("\n✓ Cleanup complete")
-                return 0
-            else:
+            if failed_count:
                 print("\n⚠️  Cleanup completed with errors")
                 return 1
+            if not deleted_count and skipped:
+                # Every resource was skipped. Saying "complete" here is how a
+                # run that deleted nothing previously read as a success.
+                print("\n⚠️  Nothing was deleted; every resource was skipped")
+                return 1
+            print("\n✓ Cleanup complete")
+            return 0
 
         else:
             print("\nError: Specify either --dry-run or --execute", file=sys.stderr)

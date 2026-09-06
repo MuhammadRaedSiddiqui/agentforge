@@ -173,3 +173,35 @@ class TestWebhookBaseFromHealthUrl:
 
     def test_unparseable_value_falls_back_rather_than_inventing_an_origin(self) -> None:
         assert webhook_base_from_health_url("not-a-url/") == "not-a-url"
+
+
+class TestCleanupCoversEveryResourceType:
+    """`cleanup --execute` reported "Cleanup complete" having deleted nothing.
+
+    It matched resource_type against "assistant" and "scenario", but receipts
+    record "vapi_assistant" and "make_scenario", so no branch ever fired and
+    both the deleted and failed counters stayed at zero. Six live resources
+    survived a cleanup that exited 0.
+    """
+
+    def test_every_recorded_type_is_either_deletable_or_explicitly_skipped(self) -> None:
+        from cli.main import DELETABLE_RESOURCE_TYPES, UNDELETABLE_RESOURCE_TYPES
+        from orchestrator.orchestrator import OPERATION_TO_RESOURCE_TYPE
+
+        recorded = set(OPERATION_TO_RESOURCE_TYPE.values())
+        handled = DELETABLE_RESOURCE_TYPES | UNDELETABLE_RESOURCE_TYPES
+
+        assert recorded - handled == set(), (
+            f"resource types nothing in cleanup accounts for: {recorded - handled}"
+        )
+
+    def test_the_two_sets_do_not_overlap(self) -> None:
+        from cli.main import DELETABLE_RESOURCE_TYPES, UNDELETABLE_RESOURCE_TYPES
+
+        assert not (DELETABLE_RESOURCE_TYPES & UNDELETABLE_RESOURCE_TYPES)
+
+    def test_deletable_types_are_the_ones_that_cost_money_to_leave_running(self) -> None:
+        from cli.main import DELETABLE_RESOURCE_TYPES
+
+        assert "make_scenario" in DELETABLE_RESOURCE_TYPES
+        assert "vapi_assistant" in DELETABLE_RESOURCE_TYPES

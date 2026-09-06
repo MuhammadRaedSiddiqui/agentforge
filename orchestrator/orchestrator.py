@@ -35,6 +35,20 @@ from shared.errors import (
 )
 from shared.hashing import compute_state_version, hash_json
 
+# The resource_type recorded against each external resource when its receipt is
+# persisted. Module-level because cleanup has to delete by exactly these
+# strings: it previously matched "assistant" and "scenario", which equal
+# nothing here, so it reported "Cleanup complete" having deleted nothing.
+OPERATION_TO_RESOURCE_TYPE = {
+    "insert_org_record": "supabase_organization_row",
+    "run_migration": "supabase_migration",
+    "create_assistant": "vapi_assistant",
+    "create_scenario": "make_scenario",
+    "update_backend": "hosting_deployment",
+    "set_env_variable": "hosting_deployment",
+    "trigger_deploy": "hosting_deployment",
+}
+
 
 class Orchestrator:
     """
@@ -395,15 +409,7 @@ class Orchestrator:
 
             # 2. Upsert external resource
             if receipt.remote_id:
-                operation_to_resource_type = {
-                    "insert_org_record": "supabase_organization_row",
-                    "run_migration": "supabase_migration",
-                    "create_assistant": "vapi_assistant",
-                    "create_scenario": "make_scenario",
-                    "update_backend": "hosting_deployment",
-                    "set_env_variable": "hosting_deployment",
-                    "trigger_deploy": "hosting_deployment",
-                }
+                operation_to_resource_type = OPERATION_TO_RESOURCE_TYPE
                 resource_type = operation_to_resource_type.get(
                     proposed_action.operation,
                     proposed_action.operation.replace("create_", ""),
