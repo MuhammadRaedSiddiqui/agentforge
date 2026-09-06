@@ -15,7 +15,11 @@
   "serverUrl": "{{server_url}}",
   "serverUrlSecret": "{{server_url_secret}}",
   "endCallMessage": "Thank you for calling {{organization_display_name}}. Have a great day!",
-  "endCallPhrases": ["goodbye", "bye", "end call"],
+  "endCallPhrases": [
+    "goodbye",
+    "bye",
+    "end call"
+  ],
   "recordingEnabled": true,
   "hipaaEnabled": false,
   "silenceTimeoutSeconds": 30,
@@ -57,12 +61,15 @@
               "description": "Type of service requested"
             }
           },
-          "required": ["date"]
+          "required": [
+            "date"
+          ]
         }
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/webhook/{{organization_id}}/availability"
+        "url": "{{server_url}}/webhook/{{organization_id}}/availability",
+        "secret": "{{server_url_secret}}"
       }
     },
     {
@@ -98,12 +105,19 @@
               "description": "Client's email address"
             }
           },
-          "required": ["date", "time", "service_type", "client_name", "client_phone"]
+          "required": [
+            "date",
+            "time",
+            "service_type",
+            "client_name",
+            "client_phone"
+          ]
         }
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/webhook/{{organization_id}}/booking"
+        "url": "{{server_url}}/webhook/{{organization_id}}/booking",
+        "secret": "{{server_url_secret}}"
       }
     },
     {
@@ -123,12 +137,16 @@
               "description": "Phone number used for booking"
             }
           },
-          "required": ["appointment_id", "phone"]
+          "required": [
+            "appointment_id",
+            "phone"
+          ]
         }
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/webhook/{{organization_id}}/cancellation"
+        "url": "{{server_url}}/webhook/{{organization_id}}/cancellation",
+        "secret": "{{server_url_secret}}"
       }
     },
     {
@@ -156,12 +174,18 @@
               "description": "New appointment time (HH:MM format)"
             }
           },
-          "required": ["appointment_id", "phone", "new_date", "new_time"]
+          "required": [
+            "appointment_id",
+            "phone",
+            "new_date",
+            "new_time"
+          ]
         }
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/webhook/{{organization_id}}/rescheduling"
+        "url": "{{server_url}}/webhook/{{organization_id}}/rescheduling",
+        "secret": "{{server_url_secret}}"
       }
     }
   ],
@@ -169,6 +193,11 @@
     "organization_id": "{{organization_id}}",
     "template_version": "1.0.0",
     "created_by": "agent-forge",
-    "capabilities": ["availability", "booking", "cancellation", "rescheduling"]
+    "capabilities": [
+      "availability",
+      "booking",
+      "cancellation",
+      "rescheduling"
+    ]
   }
 }

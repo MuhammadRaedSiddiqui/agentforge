@@ -152,3 +152,84 @@ class TestApplyBindings:
 
         with pytest.raises(RuntimeError):
             apply_bindings(adapter, bindings)
+
+
+class TestResolveWebhookSecret:
+    """Artifacts carry the placeholder; the real value is substituted in memory.
+
+    The generated assistant config is written to outputs/ in plaintext and
+    content-hashed, so embedding the secret would put it on disk and change the
+    hash whenever it rotates.
+    """
+
+    def test_placeholder_is_replaced(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from orchestrator.webhook_config import resolve_webhook_secret
+
+        monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
+        config = {"serverUrlSecret": "{{WEBHOOK_SECRET}}"}
+
+        assert resolve_webhook_secret(config) == {"serverUrlSecret": "s3cret"}
+
+    def test_nested_and_listed_placeholders_are_replaced(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from orchestrator.webhook_config import resolve_webhook_secret
+
+        monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
+        config = {"tools": [{"server": {"url": "https://x", "secret": "{{WEBHOOK_SECRET}}"}}]}
+
+        result = resolve_webhook_secret(config)
+
+        assert result["tools"][0]["server"]["secret"] == "s3cret"
+        assert result["tools"][0]["server"]["url"] == "https://x"
+
+    def test_input_is_not_mutated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from orchestrator.webhook_config import resolve_webhook_secret
+
+        monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
+        config = {"serverUrlSecret": "{{WEBHOOK_SECRET}}"}
+
+        resolve_webhook_secret(config)
+
+        assert config["serverUrlSecret"] == "{{WEBHOOK_SECRET}}"
+
+    def test_config_without_the_placeholder_is_untouched(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from orchestrator.webhook_config import resolve_webhook_secret
+
+        monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+        config = {"name": "A", "model": {"provider": "openai"}}
+
+        assert resolve_webhook_secret(config) == config
+
+    def test_missing_secret_is_an_error_not_a_passthrough(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sending the literal placeholder deploys an assistant the backend rejects."""
+        from orchestrator.webhook_config import resolve_webhook_secret
+        from shared.errors import ValidationError
+
+        monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+
+        with pytest.raises(ValidationError, match="WEBHOOK_SECRET"):
+            resolve_webhook_secret({"serverUrlSecret": "{{WEBHOOK_SECRET}}"})
+
+
+class TestTemplateCarriesToolSecrets:
+    def test_every_tool_declares_a_server_secret(self) -> None:
+        """Vapi sends `server.secret` as x-vapi-secret; without it calls are anonymous."""
+        import json
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        template = json.loads(
+            (root / "ground-truth" / "configs" / "vapi_assistant_template.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        for tool in template["tools"]:
+            assert tool["server"].get("secret") == "{{server_url_secret}}", (
+                f"{tool['function']['name']} has no server secret"
+            )

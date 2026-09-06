@@ -29,7 +29,7 @@ from orchestrator.deployment_verifier import VerificationFailure, verify_onboard
 from orchestrator.intake_schema import detect_changes, normalize_intake, validate_intake
 from orchestrator.planner import Planner
 from orchestrator.state_machine import DeploymentState, DeploymentStateMachine
-from orchestrator.webhook_config import apply_bindings, collect_bindings
+from orchestrator.webhook_config import apply_bindings, collect_bindings, resolve_webhook_secret
 from shared.errors import (
     AmbiguousOutcomeError,
     ConflictError,
@@ -601,6 +601,12 @@ class Orchestrator:
             # and invoke nothing.
             tools = assistant_config.pop("tools", None) or []
             assistant_config.pop("metadata", None)
+            # Generated artifacts keep the placeholder rather than the secret:
+            # they are written to outputs/ in plaintext and content-hashed, so
+            # embedding the real value would leak it to disk and change the
+            # hash on every rotation. Resolve it here, in memory, instead.
+            assistant_config = resolve_webhook_secret(assistant_config)
+            tools = [resolve_webhook_secret(tool) for tool in tools]
             receipt = adapter.create_assistant(assistant_config)
             assistant_id = receipt.remote_id
 

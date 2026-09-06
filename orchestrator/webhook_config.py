@@ -16,9 +16,12 @@ Without it a client is admitted and unwired, and every tool call returns 503 —
 which is the honest answer, but not a working client.
 """
 
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
+
+from shared.errors import ValidationError
 
 # Mirrors envSlug() in server.js. Both must agree or the backend looks up a
 # variable the orchestrator never set.
@@ -82,6 +85,42 @@ def collect_bindings(
         )
 
     return bindings, unresolved
+
+
+WEBHOOK_SECRET_PLACEHOLDER = "{{WEBHOOK_SECRET}}"
+
+
+def resolve_webhook_secret(config: Any) -> Any:
+    """Replace the webhook-secret placeholder with the configured value.
+
+    Generated Vapi artifacts carry `{{WEBHOOK_SECRET}}` rather than the secret
+    itself: they are written to outputs/ in plaintext and content-hashed, so
+    embedding the real value would put it on disk and change the hash whenever
+    it rotates. Substitution happens on the way to Vapi instead.
+
+    Raises when the placeholder is present and WEBHOOK_SECRET is not set —
+    sending the literal placeholder would configure an assistant whose calls
+    the backend rejects, which is the silent kind of broken.
+    """
+
+    def walk(node: Any) -> Any:
+        if isinstance(node, dict):
+            return {key: walk(value) for key, value in node.items()}
+        if isinstance(node, list):
+            return [walk(item) for item in node]
+        if node == WEBHOOK_SECRET_PLACEHOLDER:
+            secret = os.getenv("WEBHOOK_SECRET")
+            if not secret:
+                raise ValidationError(
+                    "WEBHOOK_SECRET is not set, so the assistant would be created "
+                    "with a placeholder secret and every tool call would be "
+                    "rejected by the backend.",
+                    field="WEBHOOK_SECRET",
+                )
+            return secret
+        return node
+
+    return walk(config)
 
 
 def apply_bindings(hosting_adapter: Any, bindings: list[WebhookBinding]) -> None:
