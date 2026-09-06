@@ -142,3 +142,37 @@ class TestActionSafetyMetadata:
         # against. Updates are the case that needs a state_version.
         actions = build_onboarding_actions(_package("vapi_agent"), _intake())
         assert all(a.state_version is None for a in actions)
+
+
+class TestVapiAssistantActionCarriesPhoneNumber:
+    """A live onboarding created an assistant nobody could call.
+
+    `phone_number_id` was absent from the payload, so the assignment branch in
+    the orchestrator never fired and the number stayed pointed at the previous
+    assistant — while the action reported success.
+    """
+
+    def test_phone_number_id_is_taken_from_intake(self) -> None:
+        intake = _intake(
+            external_identifiers={"vapi_phone_number_id": "ca649cc0-1234"},
+        )
+        actions = build_onboarding_actions(_package("vapi_agent"), intake)
+        vapi = next(a for a in actions if a.operation == "create_assistant")
+
+        assert vapi.payload["phone_number_id"] == "ca649cc0-1234"
+
+    def test_expected_outcome_names_tools_and_phone(self) -> None:
+        """The operator approves this text, so it must describe every side effect."""
+        intake = _intake(external_identifiers={"vapi_phone_number_id": "ca649cc0-1234"})
+        actions = build_onboarding_actions(_package("vapi_agent"), intake)
+        vapi = next(a for a in actions if a.operation == "create_assistant")
+
+        assert "tools" in vapi.expected_outcome
+        assert "ca649cc0-1234" in vapi.expected_outcome
+
+    def test_absent_phone_number_is_none_not_missing(self) -> None:
+        actions = build_onboarding_actions(_package("vapi_agent"), _intake())
+        vapi = next(a for a in actions if a.operation == "create_assistant")
+
+        assert vapi.payload["phone_number_id"] is None
+        assert "phone number" not in vapi.expected_outcome

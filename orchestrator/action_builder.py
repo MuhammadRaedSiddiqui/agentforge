@@ -62,9 +62,19 @@ def build_onboarding_actions(
             )
         )
 
-    # Vapi: create assistant
+    # Vapi: create assistant, its tools, and bind the phone number.
+    #
+    # These are sub-steps of one action rather than three, because the tool and
+    # phone calls both need the assistant id, which does not exist until the
+    # create runs — there is nothing to put in a payload at plan time. The
+    # expected_outcome therefore has to name all three, so the operator approves
+    # what actually happens rather than just the assistant.
     vapi_artifact = next((a for a in package.artifacts if a.agent_source == "vapi_agent"), None)
     if vapi_artifact:
+        phone_number_id = intake.get("external_identifiers", {}).get("vapi_phone_number_id")
+        outcome = f"Create Vapi assistant and its tools for {organization_id}"
+        if phone_number_id:
+            outcome += f", and bind phone number {phone_number_id} to it"
         actions.append(
             build_proposed_action(
                 platform="vapi",
@@ -74,11 +84,12 @@ def build_onboarding_actions(
                     "name": f"{intake.get('business_name', organization_id)}-assistant",
                     "config_path": vapi_artifact.storage_path,
                     "content_hash": vapi_artifact.content_hash,
+                    "phone_number_id": phone_number_id,
                 },
                 retry_policy="none",
                 reconciliation_strategy="list_by_name",
                 compensation_operation="delete_assistant",
-                expected_outcome=f"Create Vapi assistant for {organization_id}",
+                expected_outcome=outcome,
             )
         )
 

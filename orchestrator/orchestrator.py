@@ -515,17 +515,31 @@ class Orchestrator:
                     assistant_config = json.load(f)
             else:
                 assistant_config = payload
-            # Strip fields not accepted by Vapi's assistant create endpoint
-            assistant_config.pop("tools", None)
+            # Strip fields not accepted by Vapi's assistant create endpoint.
+            # `tools` are kept: the create endpoint rejects them inline, but they
+            # still have to be created and attached afterwards. Dropping them
+            # here is what shipped an assistant that could hold a conversation
+            # and invoke nothing.
+            tools = assistant_config.pop("tools", None) or []
             assistant_config.pop("metadata", None)
             receipt = adapter.create_assistant(assistant_config)
-            # Auto-assign phone number if provided
-            phone_number_id = payload.get("phone_number_id")
-            if phone_number_id and receipt.remote_id:
-                import contextlib
+            assistant_id = receipt.remote_id
 
-                with contextlib.suppress(Exception):
-                    adapter.assign_phone_number(phone_number_id, receipt.remote_id)
+            # Create each tool, then bind them in one PATCH. Vapi attaches tools
+            # by id under `model.toolIds`, and PATCH replaces the whole `model`
+            # object, so the rest of the model block has to be resent with it.
+            if tools and assistant_id:
+                tool_ids = [adapter.create_tool(tool).remote_id for tool in tools]
+                model_block = dict(assistant_config.get("model") or {})
+                model_block["toolIds"] = tool_ids
+                adapter.update_assistant(assistant_id, {"model": model_block})
+
+            # Bind the phone number. Not suppressed: an assistant nobody can
+            # call is a failed deployment, and swallowing this reported success
+            # while leaving the number pointed at whatever held it before.
+            phone_number_id = payload.get("phone_number_id")
+            if phone_number_id and assistant_id:
+                adapter.assign_phone_number(phone_number_id, assistant_id)
             return receipt
         elif operation == "create_tool":
             return adapter.create_tool(payload)

@@ -10,6 +10,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse
 
 from adapters.model_protocol import ModelProvider
 from adapters.supabase_internal import SupabaseInternalClient
@@ -30,6 +31,26 @@ from orchestrator.template_registry import get_template_registry
 from shared.console import enable_utf8_output
 from shared.hashing import compute_state_version
 from shared.ids import generate_deployment_id
+
+
+def webhook_base_from_health_url(health_url: str) -> str:
+    """Derive the webhook base URL from the configured health-check URL.
+
+    HOSTING_HEALTH_URL points at a health endpoint, e.g.
+    https://service.onrender.com/health. The Vapi template builds every tool
+    endpoint as `{{server_url}}/tools/<capability>`, so passing the health URL
+    through unchanged produced `.../health/tools/booking` — a 404 for every
+    tool, and an assistant whose serverUrl was a health check.
+
+    Only the origin is meaningful here, so the path is dropped entirely rather
+    than special-casing the "/health" suffix.
+    """
+    parsed = urlparse(health_url.strip())
+    if not parsed.scheme or not parsed.netloc:
+        # Not a parseable URL; fall back to the old behaviour rather than
+        # inventing an origin, and let the validator reject it downstream.
+        return health_url.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def load_intake_file(file_path: str) -> dict[str, Any]:
@@ -411,7 +432,7 @@ def _run_execute(
         generation_intake["capabilities"] = intake.get("enabled_capabilities", [])
         generation_intake["vapi"] = {"voice_id": intake.get("voice_id", "")}
         generation_intake["hosting"] = {
-            "webhook_base_url": config.hosting_health_url.rstrip("/"),
+            "webhook_base_url": webhook_base_from_health_url(config.hosting_health_url),
         }
         # Prefer the configured service source when it is available.  The
         # staging fixture supplies its checked-in server source as a safe
