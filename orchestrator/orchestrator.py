@@ -29,6 +29,7 @@ from orchestrator.deployment_verifier import VerificationFailure, verify_onboard
 from orchestrator.intake_schema import detect_changes, normalize_intake, validate_intake
 from orchestrator.planner import Planner
 from orchestrator.state_machine import DeploymentState, DeploymentStateMachine
+from orchestrator.webhook_config import apply_bindings, collect_bindings
 from shared.errors import (
     AmbiguousOutcomeError,
     ConflictError,
@@ -266,6 +267,11 @@ class Orchestrator:
                     "completed_actions": len(results),
                 }
 
+        # Point the shared backend at this client's Make hooks. Deferred to
+        # here because a hook URL does not exist until its scenario is
+        # deployed, so it cannot be part of an action payload planned upfront.
+        self._configure_client_webhooks(organization_id, results)
+
         # Every action reported success. That is not the same as a usable
         # client, so re-read what was created before calling this a completion.
         verification_failures = self._verify_deployment(proposed_actions, results)
@@ -296,6 +302,36 @@ class Orchestrator:
             "total_actions": len(results),
             "completed_actions": len(results),
         }
+
+    def _configure_client_webhooks(
+        self,
+        organization_id: str,
+        results: list[dict[str, Any]],
+    ) -> None:
+        """Set MAKE_<ORG>_<CAPABILITY>_URL for every scenario just deployed.
+
+        Raises when a scenario produced no usable hook URL. That capability's
+        route would answer 503 forever, and a deployment that quietly ships one
+        is the failure mode this whole area keeps producing.
+        """
+        bindings, unresolved = collect_bindings(organization_id, results)
+        if unresolved:
+            raise ValidationError(
+                "Deployed scenarios produced no usable Make hook URL for: "
+                f"{', '.join(sorted(unresolved))}. The backend cannot forward "
+                "these capabilities.",
+                field="hook_url",
+            )
+        if not bindings:
+            return
+
+        from adapters.hosting import RenderAdapter
+
+        adapter = RenderAdapter()
+        apply_bindings(adapter, bindings)
+        print(f"\n⚙️  Wired {len(bindings)} capability webhook(s) to the backend")
+        # The service reads these at request time, so it has to pick them up.
+        adapter.trigger_deploy()
 
     def _verify_deployment(
         self,
