@@ -70,9 +70,22 @@ class TestActionSet:
             ("render", "trigger_deploy"),
         ]
 
-    def test_org_record_only_created_for_booking(self) -> None:
+    def test_org_record_created_for_any_database_backed_capability(self) -> None:
+        """This previously asserted availability got no organization row.
+
+        That encoded the bug: the availability scenario opens with a
+        `supabase:searchRows` module, so without a tenant row it queries an
+        organization that does not exist. The row is required by every
+        capability that generates a scenario, not by booking alone.
+        """
         actions = build_onboarding_actions(
             _package("vapi_agent"), _intake(enabled_capabilities=["availability"])
+        )
+        assert ("supabase_client", "insert_org_record") in _ops(actions)
+
+    def test_org_record_not_created_without_a_database_backed_capability(self) -> None:
+        actions = build_onboarding_actions(
+            _package("vapi_agent"), _intake(enabled_capabilities=["human_transfer"])
         )
         assert ("supabase_client", "insert_org_record") not in _ops(actions)
 
@@ -176,3 +189,62 @@ class TestVapiAssistantActionCarriesPhoneNumber:
 
         assert vapi.payload["phone_number_id"] is None
         assert "phone number" not in vapi.expected_outcome
+
+
+class TestDatabaseGatingMatchesScenarios:
+    """Every generated Make scenario opens with a `supabase:searchRows` module.
+
+    The organization row was gated on "booking" alone in three places, so an
+    availability-only or cancellation-only client deployed scenarios that query
+    a tenant nobody ever created — a deployment that succeeds and cannot work.
+    """
+
+    @pytest.mark.parametrize(
+        "capabilities",
+        [
+            ["availability"],
+            ["cancellation"],
+            ["rescheduling"],
+            ["cancellation", "rescheduling"],
+            ["availability", "human_transfer"],
+        ],
+    )
+    def test_scenarios_without_booking_still_get_an_org_record(
+        self, capabilities: list[str]
+    ) -> None:
+        actions = build_onboarding_actions(
+            _package("vapi_agent", "make_agent"), _intake(enabled_capabilities=capabilities)
+        )
+        operations = [a.operation for a in actions]
+
+        assert "create_scenario" in operations
+        assert "insert_org_record" in operations
+
+    def test_human_transfer_alone_needs_no_database(self) -> None:
+        """It generates no scenario and touches no tenant."""
+        actions = build_onboarding_actions(
+            _package("vapi_agent"), _intake(enabled_capabilities=["human_transfer"])
+        )
+        operations = [a.operation for a in actions]
+
+        assert "create_scenario" not in operations
+        assert "insert_org_record" not in operations
+
+    def test_no_deployment_creates_a_scenario_without_a_tenant(self) -> None:
+        """The invariant, over every non-empty capability subset."""
+        from itertools import combinations
+
+        from orchestrator.intake_schema import VALID_CAPABILITIES
+
+        all_caps = sorted(VALID_CAPABILITIES)
+        for size in range(1, len(all_caps) + 1):
+            for subset in combinations(all_caps, size):
+                actions = build_onboarding_actions(
+                    _package("vapi_agent", "make_agent"),
+                    _intake(enabled_capabilities=list(subset)),
+                )
+                operations = [a.operation for a in actions]
+                if "create_scenario" in operations:
+                    assert "insert_org_record" in operations, (
+                        f"{subset} creates scenarios with no organization row"
+                    )

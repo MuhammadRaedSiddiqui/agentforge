@@ -16,6 +16,7 @@ from typing import Any
 
 from orchestrator.approval import ProposedAction, build_proposed_action
 from orchestrator.assembler import DeploymentPackage
+from orchestrator.intake_schema import needs_database
 
 # Capabilities that map to a Make scenario. Others (e.g. informational-only
 # capabilities) produce no Make automation.
@@ -40,8 +41,10 @@ def build_onboarding_actions(
     organization_id = intake["organization_id"]
     capabilities = intake.get("enabled_capabilities", [])
 
-    # Supabase: insert organization record (if booking capability)
-    if "booking" in capabilities:
+    # Supabase: insert the organization record. Required by every capability
+    # whose Make scenario queries the tenant, not just booking — see
+    # DATABASE_BACKED_CAPABILITIES.
+    if needs_database(capabilities):
         actions.append(
             build_proposed_action(
                 platform="supabase_client",

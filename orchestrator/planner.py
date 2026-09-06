@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from orchestrator.intake_schema import needs_database
 from shared.ids import generate_task_id, generate_uuid
 from shared.task_object import TaskObject
 
@@ -415,8 +416,7 @@ class Planner:
         Returns:
             True if database setup needed
         """
-        # Booking capability requires database
-        return "booking" in capabilities
+        return needs_database(capabilities)
 
     def create_dry_run_plan(self, graph: TaskGraph, intake: dict[str, Any]) -> dict[str, Any]:
         """
@@ -558,7 +558,7 @@ class Planner:
         )
 
         # Database changes (if needed)
-        if "booking" in capabilities:
+        if needs_database(capabilities):
             changes.append(
                 {
                     "platform": "supabase_client",
