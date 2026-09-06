@@ -596,6 +596,19 @@ def _run_execute(
                 f"Revision notes: {result.get('revision_notes', 'None')}"
             )
             return_code = 1
+        elif result["status"] == "verification_failed":
+            # Every action succeeded and the client is still unusable. Name what
+            # is wrong, because "8 of 8 actions" is exactly the message that
+            # made the previous broken deployment look finished.
+            failures = result.get("verification_failures", [])
+            lines = "\n".join(f"  • {f['check']}: {f['detail']}" for f in failures)
+            InteractivePrompts.display_error(
+                f"Deployment actions completed, but the client is not usable.\n\n"
+                f"Completed {result['completed_actions']} of {result['total_actions']} actions.\n\n"
+                f"Verification failures:\n{lines}\n\n"
+                f"The deployment is marked as requiring recovery."
+            )
+            return_code = 1
         else:
             InteractivePrompts.display_error(
                 f"Deployment ended with unexpected status: {result['status']}"

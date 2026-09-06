@@ -25,6 +25,7 @@ from orchestrator.approval import (
     verify_approval_matches_proposal,
 )
 from orchestrator.current_state_reader import CurrentStateReader, StaleStateReadError
+from orchestrator.deployment_verifier import VerificationFailure, verify_onboarding
 from orchestrator.intake_schema import detect_changes, normalize_intake, validate_intake
 from orchestrator.planner import Planner
 from orchestrator.state_machine import DeploymentState, DeploymentStateMachine
@@ -265,6 +266,27 @@ class Orchestrator:
                     "completed_actions": len(results),
                 }
 
+        # Every action reported success. That is not the same as a usable
+        # client, so re-read what was created before calling this a completion.
+        verification_failures = self._verify_deployment(proposed_actions, results)
+        if verification_failures:
+            detail = "; ".join(str(failure) for failure in verification_failures)
+            print("\n✗ Post-deployment verification failed:")
+            for failure in verification_failures:
+                print(f"  • {failure}")
+            self._mark_requires_recovery(
+                deployment_id, f"Post-deployment verification failed: {detail}"
+            )
+            return {
+                "status": "verification_failed",
+                "message": "Actions completed but the deployed client is not usable",
+                "total_actions": len(results),
+                "completed_actions": len(results),
+                "verification_failures": [
+                    {"check": f.check, "detail": f.detail} for f in verification_failures
+                ],
+            }
+
         # All actions completed
         self._complete_deployment(deployment_id)
 
@@ -274,6 +296,21 @@ class Orchestrator:
             "total_actions": len(results),
             "completed_actions": len(results),
         }
+
+    def _verify_deployment(
+        self,
+        proposed_actions: list[ProposedAction],
+        results: list[dict[str, Any]],
+    ) -> list[VerificationFailure]:
+        """Re-read created resources and report anything unusable.
+
+        Kept out of the action loop deliberately: verification is read-only, so
+        it needs no approval, and it can only run once everything it depends on
+        exists.
+        """
+        from adapters.vapi import VapiAdapter
+
+        return verify_onboarding(proposed_actions, results, VapiAdapter())
 
     # Update operations that carry a state_version, mapped to the resource
     # identity needed to re-read that state. The payload key is written by
