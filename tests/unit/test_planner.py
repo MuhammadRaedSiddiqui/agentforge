@@ -31,7 +31,25 @@ class TestPlanner:
         assert graph.has_agent_tasks("make_agent")
         assert graph.has_agent_tasks("nodejs_agent")
 
-        # Should NOT have Supabase tasks for availability only
+        # Supabase too. This previously asserted the opposite, which encoded a
+        # bug: the generated availability scenario opens with a
+        # `supabase:searchRows` module, so skipping the schema and the tenant
+        # row produced a deployment that succeeded and could not work.
+        assert graph.has_agent_tasks("supabase_agent")
+
+    def test_human_transfer_only_needs_no_supabase_tasks(self) -> None:
+        """The one capability that generates no scenario and touches no tenant."""
+        planner = Planner()
+        graph = planner.create_task_graph(
+            {
+                "organization_id": "test_org",
+                "enabled_capabilities": ["human_transfer"],
+                "business_hours": {"monday": []},
+                "timezone": "America/New_York",
+            }
+        )
+
+        assert graph.has_agent_tasks("vapi_agent")
         assert not graph.has_agent_tasks("supabase_agent")
 
     def test_booking_capability_tasks(self) -> None:
@@ -76,7 +94,7 @@ class TestPlanner:
         for task in tasks:
             if "validate" in task.action_type.lower():
                 # Find corresponding generation task
-                gen_task_id = task.action_type.replace("validate_", "generate_")
+                task.action_type.replace("validate_", "generate_")
                 # Validation should depend on generation
                 assert len(task.dependencies) > 0
 

@@ -165,7 +165,7 @@ class TestTenantIsolation:
 
         # In real test, would query pg_tables
         # For this test, document requirement
-        for table in tenant_tables:
+        for _table in tenant_tables:
             # Verify RLS is enabled
             assert True  # Placeholder - actual check in migration validation
 
@@ -213,7 +213,7 @@ class TestTenantIsolation:
 
         from adapters.supabase_internal import SupabaseInternalClient
 
-        internal_store = SupabaseInternalClient()
+        SupabaseInternalClient()
 
         # Get audit events for org-001
         mock_events = [

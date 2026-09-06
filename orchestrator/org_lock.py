@@ -100,7 +100,7 @@ class OrganizationLock:
             Lock data dictionary or None if read fails
         """
         try:
-            with lock_file.open("r") as f:
+            with lock_file.open("r", encoding="utf-8") as f:
                 data = json.load(f)
                 return dict(data) if isinstance(data, dict) else None
         except Exception:

@@ -105,7 +105,7 @@ Given a client intake JSON (business name, capabilities, voice preferences, sche
 ┌─────────────────▼───────────────────────────────────────────┐
 │                    Orchestrator Layer                         │
 │  orchestrator.py         — main deployment coordinator       │
-│  full_orchestrator.py    — end-to-end pipeline               │
+│  action_builder.py       — onboarding action construction    │
 │  planner.py              — task graph construction            │
 │  make_deployer.py        — hook-first Make.com deployment    │
 │  selective_regenerator.py— update/modification flow          │
@@ -651,7 +651,7 @@ agentforge/
 │
 ├── orchestrator/                    # Core deployment logic (20 files)
 │   ├── orchestrator.py              # Main coordinator (Orchestrator class)
-│   ├── full_orchestrator.py         # End-to-end pipeline
+│   ├── action_builder.py            # Onboarding ProposedAction construction
 │   ├── planner.py                   # Task graph builder
 │   ├── make_deployer.py             # MakeScenarioDeployer (hook-first)
 │   ├── selective_regenerator.py     # SelectiveRegenerator (update flow)

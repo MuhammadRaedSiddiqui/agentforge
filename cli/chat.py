@@ -4,7 +4,6 @@ Conversational intake session for Agent Forge.
 Provides a natural language interface for client onboarding.
 """
 
-import sys
 from typing import Any
 
 from orchestrator.conversation_agent import ConversationAgent

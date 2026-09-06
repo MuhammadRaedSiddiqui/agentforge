@@ -20,6 +20,7 @@ from typing import Any, cast
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from adapters.supabase_internal import SupabaseInternalClient
+from shared.console import enable_utf8_output
 
 # All operational tables in dependency order
 TABLES = [
@@ -228,4 +229,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    enable_utf8_output()
     main()

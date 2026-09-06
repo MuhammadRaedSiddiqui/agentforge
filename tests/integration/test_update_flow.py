@@ -195,7 +195,6 @@ class TestUpdateFlow:
         assert len(changes) == 1
 
         # Simulate rejection
-        approval_decision = "rejected_abort"
 
         # State should remain unchanged
         assert current_state["assistant_name"] == "Original Assistant"

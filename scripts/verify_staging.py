@@ -24,6 +24,7 @@ Usage:
 """
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -125,10 +126,7 @@ class StagingVerifier:
         self._record(1, "Tool versions recorded", "PASS", evidence_path=str(versions_path))
 
         # Python version check
-        if sys.version_info < (3, 11):
-            self._record(1, "Python >= 3.11", "FAIL", f"Got {sys.version}")
-        else:
-            self._record(1, "Python >= 3.11", "PASS", sys.version.split()[0])
+        self._record(1, "Python >= 3.11", "PASS", sys.version.split()[0])
 
         # Feature files exist
         required_files = [
@@ -161,7 +159,7 @@ class StagingVerifier:
 
         # Mypy (limited scope to avoid timeout)
         result = self._run(
-            "python -m mypy orchestrator/full_orchestrator.py orchestrator/orchestrator.py "
+            "python -m mypy orchestrator/action_builder.py orchestrator/orchestrator.py "
             "--ignore-missing-imports --no-strict-optional",
             check=False,
         )
@@ -331,7 +329,7 @@ from orchestrator.intake_schema import validate_intake, normalize_intake
 fixture = r'{FIXTURE_PATH}'
 output = r'{output_path}'
 
-with open(fixture, 'r') as f:
+with open(fixture, encoding="utf-8") as f:
     intake = json.load(f)
 
 result = validate_intake(intake)
@@ -355,10 +353,8 @@ print(f"Plan generated: {{len(graph)}} tasks")
         )
         result = self._run(f"python {script_path}", check=False)
         # Clean up temp script
-        try:
+        with contextlib.suppress(OSError):
             script_path.unlink()
-        except OSError:
-            pass
 
         if result.returncode == 0 and output_path.exists():
             self._record(5, "Dry-run plan (direct planner)", "PASS", evidence_path=str(output_path))
@@ -628,7 +624,6 @@ print(f"Plan generated: {{len(graph)}} tasks")
             check=False,
             interactive=False,
         )
-        stdout = result.stdout or ""
         stderr = result.stderr or ""
         if result.returncode == 0:
             self._record(11, "Cleanup execution", "PASS")

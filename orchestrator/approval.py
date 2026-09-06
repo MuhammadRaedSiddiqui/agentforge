@@ -42,6 +42,12 @@ class ProposedAction:
     payload: dict[str, Any]  # Actual payload (not hashed)
     validation_result: dict[str, Any] | None = None  # From validator
     expected_outcome: str | None = None  # Human-readable expectation
+    # Remote state this action was planned against, as read by
+    # CurrentStateReader.read_staleness_state. state_version is its hash;
+    # this is kept so drift can be shown to the operator as a field-level
+    # diff rather than "two hashes differ". Intentionally NOT part of
+    # proposal_hash — state_version already binds the same information.
+    baseline_state: dict[str, Any] | None = None
 
 
 def build_proposed_action(
@@ -56,6 +62,7 @@ def build_proposed_action(
     compensation_operation: str | None = None,
     validation_result: dict[str, Any] | None = None,
     expected_outcome: str | None = None,
+    baseline_state: dict[str, Any] | None = None,
 ) -> ProposedAction:
     """
     Build a ProposedAction with computed proposal hash.
@@ -122,6 +129,7 @@ def build_proposed_action(
         payload=payload,
         validation_result=validation_result,
         expected_outcome=expected_outcome,
+        baseline_state=baseline_state,
     )
 
 

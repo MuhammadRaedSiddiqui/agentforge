@@ -22,6 +22,8 @@ from orchestrator.approval import (
 )
 from shared.errors import ConflictError, ValidationError
 
+pytestmark = pytest.mark.unit
+
 
 class TestProposedActionBuilder:
     """Test ProposedAction construction and hash computation."""

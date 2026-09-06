@@ -9,9 +9,13 @@ Tests cover:
 - Cross-client reference detection
 """
 
+import pytest
+
 from orchestrator.assembler import PackageAssembler
 from shared.result_object import ResultObject
 from shared.task_object import TaskObject
+
+pytestmark = pytest.mark.unit
 
 
 class TestPackageAssembler:

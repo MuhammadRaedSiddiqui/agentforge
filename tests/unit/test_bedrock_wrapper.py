@@ -7,6 +7,8 @@ import pytest
 
 from adapters.bedrock_wrapper import BedrockModelWrapper, initialize_bedrock_model
 
+pytestmark = pytest.mark.unit
+
 
 class TestBedrockModelWrapperInit:
     @patch("adapters.bedrock_wrapper.boto3.Session")
@@ -124,17 +126,19 @@ class TestBuildToolConfig:
         mock_session.return_value.client.return_value = mock_client
 
         wrapper = BedrockModelWrapper(model_id="test", region_name="us-east-1")
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "update_intake",
-                "description": "Extract fields",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}},
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "update_intake",
+                    "description": "Extract fields",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}},
+                    },
                 },
-            },
-        }]
+            }
+        ]
 
         config = wrapper._build_tool_config(tools)
         assert len(config["tools"]) == 1
@@ -151,10 +155,12 @@ class TestBuildToolConfig:
         mock_session.return_value.client.return_value = mock_client
 
         wrapper = BedrockModelWrapper(model_id="test", region_name="us-east-1")
-        tools = [{
-            "type": "function",
-            "function": {"name": "my_func", "description": "desc", "parameters": {}},
-        }]
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "my_func", "description": "desc", "parameters": {}},
+            }
+        ]
         tool_choice = {"type": "function", "function": {"name": "my_func"}}
 
         config = wrapper._build_tool_config(tools, tool_choice)
@@ -170,10 +176,12 @@ class TestBuildToolConfig:
         mock_session.return_value.client.return_value = mock_client
 
         wrapper = BedrockModelWrapper(model_id="test", region_name="us-east-1")
-        tools = [{
-            "type": "function",
-            "function": {"name": "fn", "description": "d", "parameters": {}},
-        }]
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "fn", "description": "d", "parameters": {}},
+            }
+        ]
         tool_choice = {"type": "any"}
 
         config = wrapper._build_tool_config(tools, tool_choice)
@@ -216,13 +224,15 @@ class TestToOpenAIFormat:
         response = {
             "output": {
                 "message": {
-                    "content": [{
-                        "toolUse": {
-                            "toolUseId": "call_123",
-                            "name": "update_intake",
-                            "input": {"business_name": "Test Co", "org_id": "test_co"},
+                    "content": [
+                        {
+                            "toolUse": {
+                                "toolUseId": "call_123",
+                                "name": "update_intake",
+                                "input": {"business_name": "Test Co", "org_id": "test_co"},
+                            }
                         }
-                    }]
+                    ]
                 }
             },
             "stopReason": "tool_use",
@@ -251,14 +261,16 @@ class TestCreateCompletion:
 
         wrapper = BedrockModelWrapper(model_id="test-model", region_name="us-east-1")
 
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "update_intake",
-                "description": "Extract",
-                "parameters": {"type": "object", "properties": {}},
-            },
-        }]
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "update_intake",
+                    "description": "Extract",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
         tool_choice = {"type": "function", "function": {"name": "update_intake"}}
 
         wrapper.create_completion(
@@ -273,12 +285,15 @@ class TestCreateCompletion:
 
 
 class TestInitializeBedrockModel:
-    @patch.dict("os.environ", {
-        "BEDROCK_MODEL_ID": "us.anthropic.claude-sonnet-4-20250514",
-        "AWS_REGION": "us-west-2",
-        "AWS_ACCESS_KEY_ID": "AKIATEST",
-        "AWS_SECRET_ACCESS_KEY": "secret",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "BEDROCK_MODEL_ID": "us.anthropic.claude-sonnet-4-20250514",
+            "AWS_REGION": "us-west-2",
+            "AWS_ACCESS_KEY_ID": "AKIATEST",
+            "AWS_SECRET_ACCESS_KEY": "secret",
+        },
+    )
     @patch("adapters.bedrock_wrapper.boto3.Session")
     def test_initializes_from_env(self, mock_session: MagicMock) -> None:
         mock_client = MagicMock()

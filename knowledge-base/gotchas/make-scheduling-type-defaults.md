@@ -139,5 +139,7 @@ if normalized["type"] != original_type:
 
 - Make.com Scheduling API: https://developers.make.com/api-documentation/api-reference/scenarios#scheduling
 - Agent Forge Adapter: adapters/make.py - normalize_scheduling()
-- Full Orchestrator: orchestrator/full_orchestrator.py line 422
+- Action Builder: orchestrator/action_builder.py — `scheduling` in the Make
+  create_scenario payload (was orchestrator/full_orchestrator.py line 422 before
+  that module was removed)
 - Research Date: 2026-08-03

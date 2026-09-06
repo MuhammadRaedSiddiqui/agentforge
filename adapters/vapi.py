@@ -417,7 +417,7 @@ class VapiAdapter:
             headers=self._get_headers(),
             operation="list_phone_numbers",
         )
-        numbers = response if isinstance(response, list) else []
+        numbers: list[Any] = response if isinstance(response, list) else []
         return AdapterReceipt(
             platform="vapi",
             operation="list_phone_numbers",

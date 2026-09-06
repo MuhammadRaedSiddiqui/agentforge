@@ -63,7 +63,7 @@ def convert_proposal_to_gotcha(proposal: dict[str, Any]) -> str:
 **Symptom:** {symptom}
 **Verification Status:** Verified
 **Approved By:** human
-**Approved At:** {datetime.now(UTC).strftime('%Y-%m-%d')}
+**Approved At:** {datetime.now(UTC).strftime("%Y-%m-%d")}
 
 ## Root Cause
 
@@ -103,7 +103,7 @@ def convert_proposal_to_gotcha(proposal: dict[str, Any]) -> str:
 
 - {platform.title()} Documentation: (add link)
 - Agent Forge: (add relevant file references)
-- Research Date: {datetime.now(UTC).strftime('%Y-%m-%d')}
+- Research Date: {datetime.now(UTC).strftime("%Y-%m-%d")}
 - Proposed At: {proposed_at[:10]}
 """
 
@@ -173,11 +173,7 @@ def reject_proposal(proposal: dict[str, Any], reason: str | None = None) -> dict
     if reason:
         rejection_log = Path("knowledge-base/proposals/rejected.log")
         with open(rejection_log, "a", encoding="utf-8") as f:
-            f.write(
-                f"{datetime.now(UTC).isoformat()} | "
-                f"{proposal_file.name} | "
-                f"Reason: {reason}\n"
-            )
+            f.write(f"{datetime.now(UTC).isoformat()} | {proposal_file.name} | Reason: {reason}\n")
 
     # Delete proposal file
     proposal_file.unlink()

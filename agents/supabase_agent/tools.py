@@ -100,11 +100,7 @@ class GeneratePolicyTemplate:
             "organization_id = current_setting('app.current_org_id'",
         ]
 
-        for check in required_checks:
-            if check not in sql:
-                return False
-
-        return True
+        return all(check in sql for check in required_checks)
 
     @staticmethod
     def extract_policies(sql: str) -> list[dict[str, str]]:
@@ -355,7 +351,7 @@ def extract_table_names(sql: str) -> list[str]:
     for match in re.finditer(on_pattern, sql, re.IGNORECASE):
         tables.add(match.group(1))
 
-    return sorted(list(tables))
+    return sorted(tables)
 
 
 # Export utility instances

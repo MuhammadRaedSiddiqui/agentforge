@@ -2,8 +2,7 @@
 # Pinned minimum versions for bootstrap
 # Lock exact versions after Phase 0 smoke tests pass
 
-# Agent orchestration
-openai-agents>=0.0.4
+# Model client (OpenAI-compatible providers)
 openai>=1.60.0
 
 # Knowledge retrieval
@@ -25,7 +24,10 @@ pytest-timeout>=2.2.0
 pytest-mock>=3.12.0
 
 # Code quality
-ruff>=0.1.0
+# ruff is pinned exactly: its formatter output is version specific, and the
+# format check is a blocking CI gate. Bump deliberately, reformatting in the
+# same commit.
+ruff==0.14.10
 mypy>=1.7.0
 
 # Type stubs

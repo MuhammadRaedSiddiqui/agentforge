@@ -51,17 +51,13 @@ class BedrockModelWrapper:
                 inferenceConfig={"maxTokens": 5, "temperature": 0.0},
             )
             if not response.get("output", {}).get("message"):
-                raise ConnectionError(
-                    f"Bedrock model {self.model_id} returned empty response"
-                )
+                raise ConnectionError(f"Bedrock model {self.model_id} returned empty response")
         except self._client.exceptions.ValidationException as e:
             raise ConnectionError(f"Bedrock model {self.model_id} not available: {e}") from e
         except Exception as e:
             if "ValidationException" in str(type(e).__name__) or "AccessDeniedException" in str(e):
                 raise ConnectionError(f"Bedrock model {self.model_id} access denied: {e}") from e
-            raise ConnectionError(
-                f"Failed to verify Bedrock model {self.model_id}: {e}"
-            ) from e
+            raise ConnectionError(f"Failed to verify Bedrock model {self.model_id}: {e}") from e
 
     @property
     def client(self) -> Any:
@@ -125,6 +121,7 @@ class BedrockModelWrapper:
                 last_error = e
                 if attempt < max_retries:
                     import time
+
                     time.sleep(2**attempt)
                     continue
         raise Exception(f"Failed after {max_retries + 1} attempts: {last_error}") from last_error
@@ -143,21 +140,27 @@ class BedrockModelWrapper:
             if role == "system":
                 system_prompts.append({"text": content})
             elif role == "user":
-                converse_messages.append({
-                    "role": "user",
-                    "content": [{"text": content}],
-                })
+                converse_messages.append(
+                    {
+                        "role": "user",
+                        "content": [{"text": content}],
+                    }
+                )
             elif role == "assistant":
-                converse_messages.append({
-                    "role": "assistant",
-                    "content": [{"text": content}],
-                })
+                converse_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": [{"text": content}],
+                    }
+                )
 
         if not converse_messages:
-            converse_messages.append({
-                "role": "user",
-                "content": [{"text": "Hello"}],
-            })
+            converse_messages.append(
+                {
+                    "role": "user",
+                    "content": [{"text": "Hello"}],
+                }
+            )
 
         return converse_messages, system_prompts
 
@@ -172,15 +175,17 @@ class BedrockModelWrapper:
         for tool in tools:
             if tool.get("type") == "function":
                 func = tool["function"]
-                bedrock_tools.append({
-                    "toolSpec": {
-                        "name": func["name"],
-                        "description": func.get("description", ""),
-                        "inputSchema": {
-                            "json": func.get("parameters", {"type": "object", "properties": {}})
-                        },
+                bedrock_tools.append(
+                    {
+                        "toolSpec": {
+                            "name": func["name"],
+                            "description": func.get("description", ""),
+                            "inputSchema": {
+                                "json": func.get("parameters", {"type": "object", "properties": {}})
+                            },
+                        }
                     }
-                })
+                )
 
         config: dict[str, Any] = {"tools": bedrock_tools}
 
@@ -220,8 +225,17 @@ class BedrockModelWrapper:
                     )
                 )
 
+        # Map Bedrock's stopReason onto the OpenAI finish_reason vocabulary this
+        # wrapper emulates. Without the max_tokens case a truncated response is
+        # indistinguishable from a complete one, and the intake extractor would
+        # parse a half-finished payload as final.
         stop_reason = response.get("stopReason", "end_turn")
-        finish_reason = "tool_calls" if tool_calls else "stop"
+        if tool_calls:
+            finish_reason = "tool_calls"
+        elif stop_reason == "max_tokens":
+            finish_reason = "length"
+        else:
+            finish_reason = "stop"
 
         return _CompletionResponse(
             choices=[

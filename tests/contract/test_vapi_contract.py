@@ -23,6 +23,8 @@ from shared.errors import (
     ValidationError,
 )
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture
 def vapi_adapter() -> VapiAdapter:
@@ -347,9 +349,11 @@ class TestVapiErrorHandling:
             mock_request.return_value = mock_response
 
             # Note: create_assistant has validation, so we patch that too
-            with patch.object(vapi_adapter, "_validate_assistant_create_payload"):
-                with pytest.raises(ConflictError):
-                    vapi_adapter.create_assistant(payload)
+            with (
+                patch.object(vapi_adapter, "_validate_assistant_create_payload"),
+                pytest.raises(ConflictError),
+            ):
+                vapi_adapter.create_assistant(payload)
 
     def test_server_error_transient(self, vapi_adapter: VapiAdapter) -> None:
         """Test handling of 500 Server Error as transient."""

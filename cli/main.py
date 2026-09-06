@@ -10,7 +10,9 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse
 
+from adapters.model_protocol import ModelProvider
 from adapters.supabase_internal import SupabaseInternalClient
 from agents.make_agent.agent import MakeAgent
 from agents.nodejs_agent.agent import NodeJsAgent
@@ -21,11 +23,81 @@ from cli.history import DeploymentHistory
 from cli.prompts import InteractivePrompts
 from cli.session import SessionManager
 from orchestrator.assembler import PackageAssembler
+from orchestrator.current_state_reader import CurrentStateReader
 from orchestrator.intake_schema import normalize_intake, validate_intake
 from orchestrator.orchestrator import Orchestrator
 from orchestrator.planner import Planner
 from orchestrator.template_registry import get_template_registry
+from shared.console import enable_utf8_output
+from shared.hashing import compute_state_version
 from shared.ids import generate_deployment_id
+
+# Resource types `cleanup --execute` knows how to delete, and those it must
+# skip. Together these have to cover every value in
+# orchestrator.OPERATION_TO_RESOURCE_TYPE; a type in neither set would be
+# silently ignored, which is the bug this pair exists to prevent.
+DELETABLE_RESOURCE_TYPES = frozenset(
+    {"vapi_assistant", "make_scenario", "supabase_organization_row"}
+)
+# A deploy is a historical record and an env var has no adapter delete, so
+# these are reported as skipped rather than counted as deleted.
+UNDELETABLE_RESOURCE_TYPES = frozenset({"hosting_deployment", "supabase_migration"})
+
+
+def webhook_base_from_health_url(health_url: str) -> str:
+    """Derive the webhook base URL from the configured health-check URL.
+
+    HOSTING_HEALTH_URL points at a health endpoint, e.g.
+    https://service.onrender.com/health. The Vapi template builds every tool
+    endpoint as `{{server_url}}/tools/<capability>`, so passing the health URL
+    through unchanged produced `.../health/tools/booking` — a 404 for every
+    tool, and an assistant whose serverUrl was a health check.
+
+    Only the origin is meaningful here, so the path is dropped entirely rather
+    than special-casing the "/health" suffix.
+    """
+    parsed = urlparse(health_url.strip())
+    if not parsed.scheme or not parsed.netloc:
+        # Not a parseable URL; fall back to the old behaviour rather than
+        # inventing an origin, and let the validator reject it downstream.
+        return health_url.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def build_generation_intake(intake: dict[str, Any], config: AgentForgeConfig) -> dict[str, Any]:
+    """Reshape a validated intake into the form the specialist agents expect.
+
+    The agents read `capabilities`, `vapi.voice_id` and `hosting.webhook_base_url`,
+    none of which exist under those names in the execution schema. This lived
+    inline in the execute path only, so `agent-forge generate` handed the raw
+    intake straight to the agents and failed on every input with
+    "webhook_base_url must be a string" — and would have generated the wrong
+    voice and no capabilities had it got past that.
+
+    One function, so the two entry points cannot drift apart again.
+    """
+    generation_intake = dict(intake)
+    generation_intake["capabilities"] = intake.get("enabled_capabilities", [])
+    generation_intake["vapi"] = {"voice_id": intake.get("voice_id", "")}
+    generation_intake["hosting"] = {
+        "webhook_base_url": webhook_base_from_health_url(config.hosting_health_url),
+    }
+
+    # Prefer the configured service source when it is available. The staging
+    # fixture supplies its checked-in server source as a safe fallback when a
+    # placeholder configuration path is intentionally used during verification.
+    configured_server_path = Path(config.server_source_path)
+    intake_server_path = intake.get("server_source_path")
+    if configured_server_path.exists():
+        generation_intake["server_source_path"] = str(configured_server_path)
+    elif isinstance(intake_server_path, str) and Path(intake_server_path).exists():
+        generation_intake["server_source_path"] = intake_server_path
+    else:
+        raise ValueError(
+            "Server source file not found. Set SERVER_SOURCE_PATH or provide a valid "
+            "server_source_path in the intake."
+        )
+    return generation_intake
 
 
 def load_intake_file(file_path: str) -> dict[str, Any]:
@@ -47,12 +119,18 @@ def load_intake_file(file_path: str) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Intake file not found: {file_path}")
 
-    with path.open("r") as f:
+    # Explicit UTF-8. Without it Windows decodes with the locale codec (cp1252
+    # here), so an intake for "Café München" loads as "CafÃ© MÃ¼nchen" and that
+    # mojibake propagates into the generated assistant name and on to Vapi.
+    # JSON is UTF-8 by definition, so the platform default is never right.
+    with path.open("r", encoding="utf-8") as f:
         try:
             intake = json.load(f)
             return cast(dict[str, Any], intake)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in intake file: {e}") from e
+        except UnicodeDecodeError as e:
+            raise ValueError(f"Intake file is not valid UTF-8: {e}") from e
 
 
 def cmd_config_check(args: argparse.Namespace) -> int:
@@ -244,7 +322,8 @@ def _run_execute(
     """
     Run deployment execution with per-action approval.
 
-    Uses FullOrchestrator to connect US1→US2→US3→US4.
+    Builds actions via orchestrator.action_builder, then executes them through
+    Orchestrator.execute_deployment with an approval gate per action.
 
     Args:
         intake: Normalized intake
@@ -259,7 +338,7 @@ def _run_execute(
     import logging
     import os
 
-    from orchestrator.full_orchestrator import FullOrchestrator
+    from orchestrator.action_builder import build_onboarding_actions
 
     organization_id = intake["organization_id"]
     operator = os.getenv("USER", "unknown")
@@ -402,27 +481,7 @@ def _run_execute(
         # Execute every planned generation task. The legacy empty lists above
         # are retained only for display compatibility; they are not the source
         # of package artifacts.
-        generation_intake = dict(intake)
-        generation_intake["capabilities"] = intake.get("enabled_capabilities", [])
-        generation_intake["vapi"] = {"voice_id": intake.get("voice_id", "")}
-        generation_intake["hosting"] = {
-            "webhook_base_url": config.hosting_health_url.rstrip("/"),
-        }
-        # Prefer the configured service source when it is available.  The
-        # staging fixture supplies its checked-in server source as a safe
-        # fallback when a placeholder configuration path is intentionally
-        # used during verification.
-        configured_server_path = Path(config.server_source_path)
-        intake_server_path = intake.get("server_source_path")
-        if configured_server_path.exists():
-            generation_intake["server_source_path"] = str(configured_server_path)
-        elif isinstance(intake_server_path, str) and Path(intake_server_path).exists():
-            generation_intake["server_source_path"] = intake_server_path
-        else:
-            raise ValueError(
-                "Server source file not found. Set SERVER_SOURCE_PATH or provide a valid "
-                "server_source_path in the intake."
-            )
+        generation_intake = build_generation_intake(intake, config)
         agent_map: dict[str, Any] = {
             "vapi_agent": vapi_agent,
             "make_agent": make_agent,
@@ -470,11 +529,14 @@ def _run_execute(
             "organizations", filters={"organization_id": organization_id}
         )
         if not existing_org:
-            internal_client.insert("organizations", {
-                "organization_id": organization_id,
-                "display_name": intake.get("business_name", organization_id),
-                "status": "active",
-            })
+            internal_client.insert(
+                "organizations",
+                {
+                    "organization_id": organization_id,
+                    "display_name": intake.get("business_name", organization_id),
+                    "status": "active",
+                },
+            )
             print(f"  ✓ Organization record created: {organization_id}")
 
         # First, insert the intake record
@@ -517,10 +579,7 @@ def _run_execute(
         print(f"  ✓ Deployment record created: {deployment_id}")
 
         # Translate the validated package into concrete, approved actions.
-        action_builder = FullOrchestrator(internal_client)
-        proposed_actions = action_builder._build_proposed_actions(
-            package, generation_intake, deployment_id
-        )
+        proposed_actions = build_onboarding_actions(package, generation_intake)
 
         # Execute deployment with per-action approval
         print("\n[6/6] Executing deployment...")
@@ -559,6 +618,19 @@ def _run_execute(
                 f"Revision notes: {result.get('revision_notes', 'None')}"
             )
             return_code = 1
+        elif result["status"] == "verification_failed":
+            # Every action succeeded and the client is still unusable. Name what
+            # is wrong, because "8 of 8 actions" is exactly the message that
+            # made the previous broken deployment look finished.
+            failures = result.get("verification_failures", [])
+            lines = "\n".join(f"  • {f['check']}: {f['detail']}" for f in failures)
+            InteractivePrompts.display_error(
+                f"Deployment actions completed, but the client is not usable.\n\n"
+                f"Completed {result['completed_actions']} of {result['total_actions']} actions.\n\n"
+                f"Verification failures:\n{lines}\n\n"
+                f"The deployment is marked as requiring recovery."
+            )
+            return_code = 1
         else:
             InteractivePrompts.display_error(
                 f"Deployment ended with unexpected status: {result['status']}"
@@ -592,7 +664,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     """
     try:
         # Load configuration
-        load_config()
+        config = load_config()
 
         # Load intake
         intake = load_intake_file(args.intake)
@@ -607,8 +679,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 print(f"  • {error}", file=sys.stderr)
             return 1
 
-        # Normalize intake
-        normalized_intake = normalize_intake(intake)
+        # Normalize intake, then reshape it for the agents. Without this the
+        # agents receive no capabilities, no voice and no webhook base.
+        normalized_intake = build_generation_intake(normalize_intake(intake), config)
         organization_id = normalized_intake["organization_id"]
 
         print(f"\nGenerating deployment package for: {organization_id}")
@@ -968,7 +1041,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
             try:
                 internal_store = SupabaseInternalClient()
                 # Try a simple query
-                internal_store.supabase.table("organizations").select("organization_id").limit(1).execute()
+                internal_store.supabase.table("organizations").select("organization_id").limit(
+                    1
+                ).execute()
                 print("  ✓ Internal store accessible")
             except Exception as e:
                 print(f"  ✗ Internal store error: {e}")
@@ -1031,7 +1106,9 @@ def cmd_security_scan(args: argparse.Namespace) -> int:
 
         for file_path in files_to_scan:
             try:
-                content = file_path.read_text()
+                # errors="replace": this is a secret scan over arbitrary repo
+                # files, so an undecodable byte must not abort the scan.
+                content = file_path.read_text(encoding="utf-8", errors="replace")
 
                 for pattern in secret_patterns:
                     if pattern in {"password", "api_key", "token", "secret"}:
@@ -1242,20 +1319,22 @@ def cmd_update(args: argparse.Namespace) -> int:
                 return 0
 
             proposed_actions = _build_update_actions(
-                update_tasks, args.organization, changes, current_state
+                update_tasks, args.organization, changes, current_state, state_reader
             )
 
             if not proposed_actions:
                 print("\n✓ No actions required")
                 return 0
 
-            internal_store.create_deployment({
-                "deployment_id": new_deployment_id,
-                "organization_id": args.organization,
-                "status": "executing",
-                "intent": args.intent,
-                "parent_deployment_id": deployment_id,
-            })
+            internal_store.create_deployment(
+                {
+                    "deployment_id": new_deployment_id,
+                    "organization_id": args.organization,
+                    "status": "executing",
+                    "intent": args.intent,
+                    "parent_deployment_id": deployment_id,
+                }
+            )
 
             orchestrator = Orchestrator(internal_store)
             result = orchestrator.execute_deployment(
@@ -1266,7 +1345,9 @@ def cmd_update(args: argparse.Namespace) -> int:
             )
 
             if result.get("status") == "completed":
-                print(f"\n✓ Update complete — {result.get('completed_actions', 0)} action(s) applied")
+                print(
+                    f"\n✓ Update complete — {result.get('completed_actions', 0)} action(s) applied"
+                )
                 return 0
             elif result.get("status") == "aborted":
                 print(f"\n⚠️  Update aborted: {result.get('message', '')}")
@@ -1292,9 +1373,19 @@ def _build_update_actions(
     organization_id: str,
     changes: dict,
     current_state: dict,
+    state_reader: CurrentStateReader | None = None,
 ) -> list:
-    """Build ProposedAction list from update tasks."""
+    """
+    Build ProposedAction list from update tasks.
+
+    Update actions carry a state_version and the baseline projection it hashes.
+    Immediately before each write, the orchestrator re-reads the same projection
+    and compares: if it differs, someone changed the resource after planning and
+    the operator is asked before anything is overwritten.
+    """
     from orchestrator.approval import build_proposed_action
+
+    reader = state_reader or CurrentStateReader()
 
     actions = []
     for task in tasks:
@@ -1303,6 +1394,7 @@ def _build_update_actions(
             assistants = vapi_state.get("assistants", [])
             assistant_id = assistants[0]["id"] if assistants else None
             if assistant_id:
+                baseline = reader.read_staleness_state("vapi", "assistant", str(assistant_id))
                 actions.append(
                     build_proposed_action(
                         platform="vapi",
@@ -1312,6 +1404,8 @@ def _build_update_actions(
                             "assistant_id": assistant_id,
                             "updates": {k: v["to"] for k, v in changes.items()},
                         },
+                        state_version=compute_state_version(baseline),
+                        baseline_state=baseline,
                         retry_policy="none",
                         reconciliation_strategy="read_after_write",
                         compensation_operation=None,
@@ -1323,6 +1417,7 @@ def _build_update_actions(
             make_state = current_state.get("platforms", {}).get("make", {})
             scenarios = make_state.get("scenarios", [])
             for scenario in scenarios:
+                baseline = reader.read_staleness_state("make", "scenario", str(scenario["id"]))
                 actions.append(
                     build_proposed_action(
                         platform="make",
@@ -1332,6 +1427,8 @@ def _build_update_actions(
                             "scenario_id": scenario["id"],
                             "updates": {k: v["to"] for k, v in changes.items()},
                         },
+                        state_version=compute_state_version(baseline),
+                        baseline_state=baseline,
                         retry_policy="none",
                         reconciliation_strategy="read_after_write",
                         compensation_operation=None,
@@ -1432,44 +1529,58 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
                 print("Cleanup cancelled")
                 return 0
 
-            # Delete resources by platform
+            # Delete resources by platform.
+            #
+            # The resource_type strings are written by orchestrator.py when a
+            # receipt is persisted ("vapi_assistant", "make_scenario",
+            # "supabase_organization_row", "hosting_deployment"). This block
+            # previously matched "assistant" and "scenario", which never equal
+            # those, so every resource fell through and the run reported
+            # "Cleanup complete" having deleted nothing. Unrecognised types are
+            # now counted, so the summary can never claim success for work it
+            # did not do.
             deleted_count = 0
             failed_count = 0
+            skipped: list[str] = []
 
             for platform, platform_resources in by_platform.items():
                 print(f"\nDeleting {platform} resources...")
 
                 for resource in platform_resources:
+                    remote_id = resource["remote_resource_id"]
+                    resource_type = resource["resource_type"]
                     try:
-                        remote_id = resource["remote_resource_id"]
-                        resource_type = resource["resource_type"]
-
-                        # Delete based on platform
-                        if platform == "vapi":
+                        if resource_type == "vapi_assistant":
                             from adapters.vapi import VapiAdapter
 
-                            adapter = VapiAdapter()
-
-                            if resource_type == "assistant":
-                                result = adapter.delete_assistant(remote_id)
-                                if result["success"]:
-                                    print(f"  ✓ Deleted assistant {remote_id}")
-                                    deleted_count += 1
-                                else:
-                                    print(f"  ✗ Failed to delete assistant {remote_id}")
-                                    failed_count += 1
-
-                        elif platform == "make":
+                            receipt = VapiAdapter().delete_assistant(remote_id)
+                        elif resource_type == "make_scenario":
                             from adapters.make import MakeAdapter
 
-                            if resource_type == "scenario":
-                                result = MakeAdapter().delete_scenario(remote_id)
-                                if result["success"]:
-                                    print(f"  ✓ Deleted scenario {remote_id}")
-                                    deleted_count += 1
-                                else:
-                                    print(f"  ✗ Failed to delete scenario {remote_id}")
-                                    failed_count += 1
+                            # Make identifies scenarios numerically; receipts
+                            # store every remote id as a string.
+                            receipt = MakeAdapter().delete_scenario(int(remote_id))
+                        elif resource_type == "supabase_organization_row":
+                            from adapters.supabase_client import SupabaseClientAdapter
+
+                            receipt = SupabaseClientAdapter().delete_org_record(remote_id)
+                        else:
+                            # hosting_deployment covers deploys and env vars: a
+                            # deploy is a historical record, not a resource that
+                            # can be removed, and no adapter exposes a delete.
+                            skipped.append(f"{resource_type} {remote_id}")
+                            print(f"  - Skipped {resource_type} {remote_id} (no delete supported)")
+                            continue
+
+                        if receipt.status == "success":
+                            print(f"  ✓ Deleted {resource_type} {remote_id}")
+                            deleted_count += 1
+                        else:
+                            print(
+                                f"  ✗ Failed to delete {resource_type} {remote_id} "
+                                f"(status {receipt.status})"
+                            )
+                            failed_count += 1
 
                     except Exception as e:
                         print(f"  ✗ Error deleting {resource_type} {remote_id}: {e}")
@@ -1481,13 +1592,21 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
             print("=" * 60)
             print(f"Deleted: {deleted_count}")
             print(f"Failed: {failed_count}")
+            if skipped:
+                print(f"Skipped: {len(skipped)} (no delete supported)")
+                for item in skipped:
+                    print(f"  - {item}")
 
-            if failed_count == 0:
-                print("\n✓ Cleanup complete")
-                return 0
-            else:
+            if failed_count:
                 print("\n⚠️  Cleanup completed with errors")
                 return 1
+            if not deleted_count and skipped:
+                # Every resource was skipped. Saying "complete" here is how a
+                # run that deleted nothing previously read as a success.
+                print("\n⚠️  Nothing was deleted; every resource was skipped")
+                return 1
+            print("\n✓ Cleanup complete")
+            return 0
 
         else:
             print("\nError: Specify either --dry-run or --execute", file=sys.stderr)
@@ -1528,6 +1647,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
 
                 print("\n[1/3] Initializing model from environment...")
 
+                model: ModelProvider
                 if provider_name == "bedrock":
                     from adapters.bedrock_wrapper import initialize_bedrock_model
 
@@ -1563,6 +1683,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
 
                 if provider_name != "bedrock":
                     from adapters.model_wrapper import reset_model as _reset
+
                     _reset()
 
                 return 0
@@ -1659,6 +1780,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
         provider = os.getenv("MODEL_PROVIDER", "gemini").lower()
 
         # Initialize model based on provider
+        model: ModelProvider
         if provider == "bedrock":
             from adapters.bedrock_wrapper import initialize_bedrock_model
 
@@ -1701,8 +1823,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 receipt = vapi.list_voices()
                 voices = receipt.response_data.get("voices", [])
                 available_ids = [
-                    v.get("voiceId") or v.get("id") or v.get("name", "")
-                    for v in voices
+                    v.get("voiceId") or v.get("id") or v.get("name", "") for v in voices
                 ]
                 if available_ids and voice_id not in available_ids:
                     print(f"\nVoice '{voice_id}' not found in Vapi.", file=sys.stderr)
@@ -1744,6 +1865,10 @@ def main() -> int:
     Returns:
         Exit code
     """
+    # Before any output: the approval display uses non-ASCII glyphs, which
+    # crash on Windows the moment stdout is redirected rather than a console.
+    enable_utf8_output()
+
     parser = argparse.ArgumentParser(
         prog="agent-forge",
         description="Agent Forge - Safe client deployment automation",
@@ -2142,10 +2267,6 @@ if __name__ == "__main__":
     import os
 
     if os.name == "nt":
-        sys.stdout = io.TextIOWrapper(
-            sys.stdout.buffer, encoding="utf-8", errors="replace"
-        )
-        sys.stderr = io.TextIOWrapper(
-            sys.stderr.buffer, encoding="utf-8", errors="replace"
-        )
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
     sys.exit(main())

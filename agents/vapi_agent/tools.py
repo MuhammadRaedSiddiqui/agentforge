@@ -159,9 +159,8 @@ def _field_in_intake(field_name: str, field_value: Any, intake: dict[str, Any]) 
         for v in d.values():
             if v == value:
                 return True
-            if isinstance(v, dict):
-                if search_dict(v, value):
-                    return True
+            if isinstance(v, dict) and search_dict(v, value):
+                return True
         return False
 
     return search_dict(intake, field_value)

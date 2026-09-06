@@ -149,7 +149,7 @@ class TestKnowledgeRetrieval:
         )
 
         # Should include both verified and unverified
-        statuses = {r["metadata"]["verification_status"] for r in all_results}
+        {r["metadata"]["verification_status"] for r in all_results}
         # May or may not find both depending on similarity
 
     def test_provenance_display_in_results(self) -> None:

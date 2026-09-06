@@ -1,11 +1,14 @@
 """Unit tests for orchestrator/conversation_state.py"""
 
 import pytest
+
 from orchestrator.conversation_state import (
     ConversationState,
     PartialIntakeData,
     SessionPhase,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestSessionPhase:
@@ -56,7 +59,13 @@ class TestPartialIntakeData:
     def test_missing_required_fields_all_missing(self) -> None:
         p = PartialIntakeData()
         missing = p.missing_required_fields()
-        assert set(missing) == {"org_id", "business_name", "phone_number", "voice_id", "capabilities"}
+        assert set(missing) == {
+            "org_id",
+            "business_name",
+            "phone_number",
+            "voice_id",
+            "capabilities",
+        }
 
     def test_missing_required_fields_partial(self) -> None:
         p = PartialIntakeData(

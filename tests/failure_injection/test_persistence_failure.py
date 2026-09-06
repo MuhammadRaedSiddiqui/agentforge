@@ -5,6 +5,7 @@ Tests T108: Verify reconciliation handles case where remote operation succeeds
 but local receipt persistence fails, requiring reconciliation on restart.
 """
 
+import contextlib
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
@@ -280,14 +281,12 @@ class TestPersistenceFailure:
 
             # May raise PersistenceError
             # Depending on implementation, might be caught internally
-            try:
+            with contextlib.suppress(PersistenceError):
                 orchestrator._execute_action(
                     deployment_id="dep_audit_001",
                     proposed_action=proposed_action,
                     approval=approval,
                 )
-            except PersistenceError:
-                pass
 
             # Verify receipt was persisted
             assert len(receipts) == 1

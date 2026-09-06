@@ -21,6 +21,8 @@ from orchestrator.approval import build_proposed_action
 from orchestrator.orchestrator import Orchestrator
 from shared.errors import ConflictError, ValidationError
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def mock_internal_store() -> Any:
@@ -215,7 +217,7 @@ class TestSequentialDeploymentFlow:
 
         with (
             patch("adapters.vapi.VapiAdapter") as MockVapi,
-            patch("adapters.make.MakeAdapter") as MockMake,
+            patch("adapters.make.MakeAdapter"),
             patch("cli.prompts.InteractivePrompts.approve_action") as mock_approve,
         ):
             # Setup mock adapters

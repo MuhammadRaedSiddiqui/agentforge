@@ -69,7 +69,7 @@ def parse_gotcha_file(file_path: Path) -> dict[str, Any]:
     # Parse structured fields
     # Format: **FieldName:** Value
     lines = content.split("\n")
-    for i, line in enumerate(lines):
+    for _i, line in enumerate(lines):
         # Split on ':** ' to handle markdown bold format
         if ":**" in line:
             parts = line.split(":**", 1)

@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class SessionPhase(Enum):
@@ -13,23 +12,26 @@ class SessionPhase(Enum):
 
 @dataclass
 class PartialIntakeData:
-    org_id: Optional[str] = None
-    business_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    voice_id: Optional[str] = None
-    capabilities: Optional[list[str]] = None
-    industry: Optional[str] = None
-    timezone: Optional[str] = None
-    business_hours: Optional[dict[str, str]] = None
+    org_id: str | None = None
+    business_name: str | None = None
+    phone_number: str | None = None
+    voice_id: str | None = None
+    capabilities: list[str] | None = None
+    industry: str | None = None
+    timezone: str | None = None
+    # day name -> list of {"open": "HH:MM", "close": "HH:MM"}; empty list = closed
+    business_hours: dict[str, list[dict[str, str]]] | None = None
 
     def required_fields_present(self) -> bool:
-        return all([
-            self.org_id,
-            self.business_name,
-            self.phone_number,
-            self.voice_id,
-            self.capabilities,
-        ])
+        return all(
+            [
+                self.org_id,
+                self.business_name,
+                self.phone_number,
+                self.voice_id,
+                self.capabilities,
+            ]
+        )
 
     def missing_required_fields(self) -> list[str]:
         missing: list[str] = []
@@ -63,5 +65,5 @@ class ConversationState:
     phase: SessionPhase = SessionPhase.GATHERING
     partial_intake: PartialIntakeData = field(default_factory=PartialIntakeData)
     messages: list[dict[str, object]] = field(default_factory=list)
-    confirmed_plan: Optional[dict[str, object]] = None
-    session_id: Optional[str] = None
+    confirmed_plan: dict[str, object] | None = None
+    session_id: str | None = None

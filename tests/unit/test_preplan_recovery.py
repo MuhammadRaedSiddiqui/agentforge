@@ -6,6 +6,8 @@ import pytest
 
 from adapters.supabase_internal import SupabaseInternalClient
 
+pytestmark = pytest.mark.unit
+
 
 def _store_with_deployment(deployment: dict) -> SupabaseInternalClient:
     store = object.__new__(SupabaseInternalClient)

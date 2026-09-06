@@ -4,8 +4,11 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from orchestrator.conversation_agent import ConversationAgent
 from orchestrator.conversation_state import SessionPhase
+
+pytestmark = pytest.mark.integration
 
 
 def _make_extraction_model(extractions_per_turn: list[dict]) -> MagicMock:
@@ -47,14 +50,18 @@ class TestCompleteIntakeInOneTurn:
     @patch("orchestrator.conversation_agent.SYSTEM_PROMPT_PATH")
     def test_all_fields_in_one_message(self, mock_path: MagicMock) -> None:
         mock_path.read_text.return_value = "System prompt"
-        model = _make_extraction_model([{
-            "org_id": "miami_glow_salon",
-            "business_name": "Miami Glow Salon",
-            "phone_number": "+13055551234",
-            "voice_id": "jennifer",
-            "capabilities": ["booking", "cancellation", "rescheduling"],
-            "industry": "salon",
-        }])
+        model = _make_extraction_model(
+            [
+                {
+                    "org_id": "miami_glow_salon",
+                    "business_name": "Miami Glow Salon",
+                    "phone_number": "+13055551234",
+                    "voice_id": "jennifer",
+                    "capabilities": ["booking", "cancellation", "rescheduling"],
+                    "industry": "salon",
+                }
+            ]
+        )
 
         agent = ConversationAgent(model)
         state = agent.new_session()
@@ -75,12 +82,18 @@ class TestIncrementalIntakeAcrossTurns:
     @patch("orchestrator.conversation_agent.SYSTEM_PROMPT_PATH")
     def test_five_turn_conversation(self, mock_path: MagicMock) -> None:
         mock_path.read_text.return_value = "System prompt"
-        model = _make_extraction_model([
-            {"business_name": "Downtown Dental", "org_id": "downtown_dental", "industry": "dental"},
-            {"capabilities": ["booking", "cancellation"]},
-            {"phone_number": "+14155556789"},
-            {"voice_id": "rachel"},
-        ])
+        model = _make_extraction_model(
+            [
+                {
+                    "business_name": "Downtown Dental",
+                    "org_id": "downtown_dental",
+                    "industry": "dental",
+                },
+                {"capabilities": ["booking", "cancellation"]},
+                {"phone_number": "+14155556789"},
+                {"voice_id": "rachel"},
+            ]
+        )
 
         agent = ConversationAgent(model)
         state = agent.new_session()
@@ -111,16 +124,18 @@ class TestCorrectionMidConversation:
     def test_correction_updates_field(self, mock_path: MagicMock) -> None:
         mock_path.read_text.return_value = "System prompt"
 
-        model = _make_extraction_model([
-            {
-                "org_id": "test_org",
-                "business_name": "Test Org",
-                "phone_number": "+13055551234",
-                "voice_id": "jennifer",
-                "capabilities": ["booking"],
-            },
-            {"phone_number": "+13055559999"},
-        ])
+        model = _make_extraction_model(
+            [
+                {
+                    "org_id": "test_org",
+                    "business_name": "Test Org",
+                    "phone_number": "+13055551234",
+                    "voice_id": "jennifer",
+                    "capabilities": ["booking"],
+                },
+                {"phone_number": "+13055559999"},
+            ]
+        )
 
         agent = ConversationAgent(model)
         state = agent.new_session()
@@ -139,14 +154,18 @@ class TestHandoffProducesValidIntake:
     @patch("orchestrator.conversation_agent.SYSTEM_PROMPT_PATH")
     def test_confirmed_plan_has_all_required_fields(self, mock_path: MagicMock) -> None:
         mock_path.read_text.return_value = "System prompt"
-        model = _make_extraction_model([{
-            "org_id": "test_co",
-            "business_name": "Test Co",
-            "phone_number": "+11234567890",
-            "voice_id": "adam",
-            "capabilities": ["booking", "availability"],
-            "timezone": "America/Chicago",
-        }])
+        model = _make_extraction_model(
+            [
+                {
+                    "org_id": "test_co",
+                    "business_name": "Test Co",
+                    "phone_number": "+11234567890",
+                    "voice_id": "adam",
+                    "capabilities": ["booking", "availability"],
+                    "timezone": "America/Chicago",
+                }
+            ]
+        )
 
         agent = ConversationAgent(model)
         state = agent.new_session()

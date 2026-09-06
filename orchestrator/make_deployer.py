@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from adapters.make import MakeAdapter
+from shared.errors import AmbiguousOutcomeError
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,14 @@ class MakeScenarioDeployer:
             stringify=True,
         )
         hook_id = hook_receipt.remote_id
+        if hook_id is None:
+            # The hook may well have been created; we just cannot address it.
+            # Failing here keeps the orphan visible instead of surfacing as a
+            # TypeError several steps later, inside blueprint construction.
+            raise AmbiguousOutcomeError(
+                f"Make returned no hook id for {capability}; a hook may exist but "
+                "cannot be referenced. Reconcile before retrying."
+            )
         result["hook_id"] = hook_id
         logger.info(f"Created hook {hook_id} for {capability}")
 
@@ -92,7 +101,9 @@ class MakeScenarioDeployer:
                 # Only retry transient errors (429/500); permanent errors like IM007 should fallback
                 from shared.errors import TransientError
 
-                is_transient = isinstance(e, TransientError) or "500" in msg or "Server error" in msg
+                is_transient = (
+                    isinstance(e, TransientError) or "500" in msg or "Server error" in msg
+                )
                 is_rate_limited = "429" in msg or "Rate limited" in msg
                 if is_transient and attempt < 3:
                     wait = (5 * (2**attempt)) if is_rate_limited else 1.5
@@ -104,6 +115,11 @@ class MakeScenarioDeployer:
                 break
 
         if receipt is not None:
+            if receipt.remote_id is None:
+                raise AmbiguousOutcomeError(
+                    f"Make returned no scenario id for {capability}; a scenario may "
+                    "exist but cannot be referenced. Reconcile before retrying."
+                )
             scenario_id = int(receipt.remote_id)
             result["scenario_id"] = scenario_id
             # Stagger next Make call to avoid burst 429
@@ -137,7 +153,11 @@ class MakeScenarioDeployer:
                         time.sleep(5 * (2**attempt))
                         continue
                     raise
-            assert stub_receipt is not None
+            if stub_receipt is None or stub_receipt.remote_id is None:
+                raise AmbiguousOutcomeError(
+                    f"Make returned no scenario id for the {capability} stub; a "
+                    "scenario may exist but cannot be referenced. Reconcile before retrying."
+                )
             scenario_id = int(stub_receipt.remote_id)
             result["scenario_id"] = scenario_id
 
@@ -162,7 +182,7 @@ class MakeScenarioDeployer:
 
         # Step 5: Verify module count
         try:
-            bp_receipt = self.adapter.get_scenario_blueprint(scenario_id)  # type: ignore[arg-type]
+            bp_receipt = self.adapter.get_scenario_blueprint(scenario_id)
             response = bp_receipt.response_data or {}
             bp_response = response.get("response", response)
             blueprint = bp_response.get("blueprint", bp_response)
@@ -181,7 +201,7 @@ class MakeScenarioDeployer:
         # Step 6: Activate (with retry for 429)
         for attempt in range(3):
             try:
-                self.adapter.activate_scenario(scenario_id)  # type: ignore[arg-type]
+                self.adapter.activate_scenario(scenario_id)
                 result["activated"] = True
                 break
             except Exception as act_err:
@@ -199,7 +219,8 @@ class MakeScenarioDeployer:
         if not path.exists():
             raise FileNotFoundError(f"Blueprint not found: {blueprint_path}")
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            blueprint: dict[str, Any] = json.load(f)
+        return blueprint
 
     def _inject_hook_id(
         self, blueprint: dict[str, Any], capability: str, hook_id: str

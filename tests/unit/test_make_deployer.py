@@ -36,11 +36,7 @@ def mock_adapter():
         remote_id="55001",
         status="success",
         response_data={
-            "response": {
-                "blueprint": {
-                    "flow": [{"id": i, "module": "test"} for i in range(1, 5)]
-                }
-            },
+            "response": {"blueprint": {"flow": [{"id": i, "module": "test"} for i in range(1, 5)]}},
             "code": 200,
         },
         idempotency_key=None,
@@ -72,10 +68,34 @@ def availability_blueprint(tmp_path):
     blueprint = {
         "name": "Test - Availability",
         "flow": [
-            {"id": 1, "module": "gateway:CustomWebHook", "version": 1, "parameters": {"hook": "{{availability_hook_id}}"}, "mapper": {}},
-            {"id": 2, "module": "supabase:searchRows", "version": 1, "parameters": {"__IMTCONN__": "{{supabase_connection_id}}"}, "mapper": {"table": "availability_slots"}},
-            {"id": 3, "module": "json:TransformToJSON", "version": 1, "parameters": {}, "mapper": {}},
-            {"id": 4, "module": "http:ActionSendData", "version": 3, "parameters": {}, "mapper": {}},
+            {
+                "id": 1,
+                "module": "gateway:CustomWebHook",
+                "version": 1,
+                "parameters": {"hook": "{{availability_hook_id}}"},
+                "mapper": {},
+            },
+            {
+                "id": 2,
+                "module": "supabase:searchRows",
+                "version": 1,
+                "parameters": {"__IMTCONN__": "{{supabase_connection_id}}"},
+                "mapper": {"table": "availability_slots"},
+            },
+            {
+                "id": 3,
+                "module": "json:TransformToJSON",
+                "version": 1,
+                "parameters": {},
+                "mapper": {},
+            },
+            {
+                "id": 4,
+                "module": "http:ActionSendData",
+                "version": 3,
+                "parameters": {},
+                "mapper": {},
+            },
         ],
         "metadata": {"version": 1},
     }
@@ -174,10 +194,13 @@ class TestMakeScenarioDeployer:
         mock_adapter.create_scenario.side_effect = [
             PermanentError("IM007 blueprint error"),
             AdapterReceipt(
-                platform="make", operation="create_scenario",
-                remote_id="55002", status="success",
+                platform="make",
+                operation="create_scenario",
+                remote_id="55002",
+                status="success",
                 response_data={"scenario": {"id": 55002}},
-                idempotency_key=None, can_retry=False,
+                idempotency_key=None,
+                can_retry=False,
             ),
         ]
 

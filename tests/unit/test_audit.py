@@ -68,7 +68,7 @@ class TestAuditEventRecording:
 
     def test_redacts_secrets_in_detail(self) -> None:
         """Test that secrets in detail are redacted."""
-        event_id = self.audit_writer.record_event(
+        self.audit_writer.record_event(
             deployment_id="deploy-001",
             event_type=AuditEventType.ACTION_SUCCEEDED,
             actor="system",
@@ -96,7 +96,7 @@ class TestAuditEventRecording:
         # First event - no previous
         self.mock_store.get_last_audit_event.return_value = None
 
-        event_id = self.audit_writer.record_event(
+        self.audit_writer.record_event(
             deployment_id="deploy-001",
             event_type=AuditEventType.DEPLOYMENT_CREATED,
             actor="operator",
@@ -116,7 +116,7 @@ class TestAuditEventRecording:
         """Test that subsequent events link to previous event hash."""
         # First event
         self.mock_store.get_last_audit_event.return_value = None
-        event1_id = self.audit_writer.record_event(
+        self.audit_writer.record_event(
             deployment_id="deploy-001",
             event_type=AuditEventType.DEPLOYMENT_CREATED,
             actor="operator",
@@ -132,7 +132,7 @@ class TestAuditEventRecording:
         # Second event - should link to first
         self.mock_store.get_last_audit_event.return_value = event1
 
-        event2_id = self.audit_writer.record_event(
+        self.audit_writer.record_event(
             deployment_id="deploy-001",
             event_type=AuditEventType.TASK_STARTED,
             actor="system",
@@ -320,7 +320,7 @@ class TestAuditEventRecording:
         """Test that events include immutable timestamp."""
         before = datetime.now(UTC)
 
-        event_id = self.audit_writer.record_event(
+        self.audit_writer.record_event(
             deployment_id="deploy-001",
             event_type=AuditEventType.DEPLOYMENT_CREATED,
             actor="operator",

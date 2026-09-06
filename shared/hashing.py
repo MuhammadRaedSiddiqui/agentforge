@@ -19,10 +19,7 @@ def hash_content(content: str | bytes) -> str:
     Returns:
         Hex-encoded SHA-256 hash (64 characters)
     """
-    if isinstance(content, str):
-        content_bytes = content.encode("utf-8")
-    else:
-        content_bytes = content
+    content_bytes = content.encode("utf-8") if isinstance(content, str) else content
 
     return hashlib.sha256(content_bytes).hexdigest()
 

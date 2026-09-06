@@ -8,6 +8,7 @@ Verifies that Chroma can:
 - Delete a temporary collection
 """
 
+import contextlib
 import shutil
 from pathlib import Path
 
@@ -39,11 +40,9 @@ def test_chroma_smoke() -> None:
         # Test 2: Create a temporary collection
         collection_name = "test_smoke_collection"
         try:
-            # Delete if exists from previous run
-            try:
+            # Delete if exists from previous run; absent is the normal case
+            with contextlib.suppress(Exception):
                 client.delete_collection(name=collection_name)
-            except Exception:
-                pass  # Collection doesn't exist, that's fine
 
             collection = client.create_collection(
                 name=collection_name,

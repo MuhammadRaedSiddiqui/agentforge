@@ -40,6 +40,29 @@ VALID_CAPABILITIES = {
     "human_transfer",
 }
 
+# Capabilities whose Make scenario reads the client's Supabase tenant. Every
+# generated scenario for these opens with a `supabase:searchRows` module, so
+# each one needs the schema migration and the organization row to exist.
+#
+# This was previously keyed on "booking" alone in three places, which meant an
+# availability-only or cancellation-only client deployed scenarios that query a
+# tenant nobody ever created — a deployment that succeeds and cannot work.
+# human_transfer is absent because it generates no scenario and touches no
+# database.
+DATABASE_BACKED_CAPABILITIES = frozenset(
+    {
+        "availability",
+        "booking",
+        "cancellation",
+        "rescheduling",
+    }
+)
+
+
+def needs_database(capabilities: list[str] | set[str]) -> bool:
+    """Whether this capability set requires a Supabase tenant and migration."""
+    return bool(set(capabilities) & DATABASE_BACKED_CAPABILITIES)
+
 
 class IntakeSchema:
     """
@@ -189,9 +212,8 @@ def validate_intake(intake: dict[str, Any]) -> dict[str, Any]:
                 errors.append(f"Unknown capability: {cap}")
 
     # Validate capability-specific required fields
-    if "booking" in capabilities:
-        if not intake.get("booking_calendar_id"):
-            errors.append("booking_calendar_id is required when booking capability is enabled")
+    if "booking" in capabilities and not intake.get("booking_calendar_id"):
+        errors.append("booking_calendar_id is required when booking capability is enabled")
 
     if "cancellation" in capabilities:
         if "cancellation_window_hours" not in intake:
@@ -203,9 +225,8 @@ def validate_intake(intake: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(window, int) or window < 0:
                 errors.append("cancellation_window_hours must be a non-negative integer")
 
-    if "rescheduling" in capabilities:
-        if not intake.get("rescheduling_policy"):
-            errors.append("rescheduling_policy is required when rescheduling capability is enabled")
+    if "rescheduling" in capabilities and not intake.get("rescheduling_policy"):
+        errors.append("rescheduling_policy is required when rescheduling capability is enabled")
 
     if "human_transfer" in capabilities:
         if not intake.get("transfer_destination"):

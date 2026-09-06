@@ -22,6 +22,8 @@ from shared.errors import (
     ValidationError,
 )
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture
 def render_adapter() -> RenderAdapter:
@@ -178,7 +180,7 @@ class TestRenderDeployOperations:
             mock_response.headers = {}
             mock_request.return_value = mock_response
 
-            receipt = render_adapter.trigger_deploy(commit_id="commit123")
+            render_adapter.trigger_deploy(commit_id="commit123")
 
             # Verify commit_id was included
             call_args = mock_request.call_args
@@ -196,7 +198,7 @@ class TestRenderDeployOperations:
             mock_response.headers = {}
             mock_request.return_value = mock_response
 
-            receipt = render_adapter.trigger_deploy(clear_cache="clear")
+            render_adapter.trigger_deploy(clear_cache="clear")
 
             # Verify clearCache was set
             call_args = mock_request.call_args
@@ -270,18 +272,20 @@ class TestRenderHealthCheck:
 
     def test_check_health_from_env(self, render_adapter: dict) -> None:
         """Test health check using HOSTING_HEALTH_URL from environment."""
-        with patch.dict("os.environ", {"HOSTING_HEALTH_URL": "https://example.com/health"}):
-            with patch("requests.Session.request") as mock_request:
-                mock_response = MagicMock()
-                mock_response.status_code = 200
-                mock_response.json.return_value = {"status": "healthy"}
-                mock_response.headers = {}
-                mock_request.return_value = mock_response
+        with (
+            patch.dict("os.environ", {"HOSTING_HEALTH_URL": "https://example.com/health"}),
+            patch("requests.Session.request") as mock_request,
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"status": "healthy"}
+            mock_response.headers = {}
+            mock_request.return_value = mock_response
 
-                receipt = render_adapter.check_health()
+            receipt = render_adapter.check_health()
 
-                assert receipt.platform == "render"
-                assert receipt.operation == "check_health"
+            assert receipt.platform == "render"
+            assert receipt.operation == "check_health"
 
     def test_check_health_http_rejected(self, render_adapter: dict) -> None:
         """Test that HTTP (non-HTTPS) URLs are rejected."""
@@ -406,7 +410,6 @@ class TestRenderSecretProtection:
 
             # The request should have been made, but we verify redaction
             # by ensuring the adapter's redaction mechanism was activated
-            call_args = mock_request.call_args
             # The base adapter should handle redaction via redact_request_body flag
             # We can't directly verify the log, but we verify the mechanism exists
 

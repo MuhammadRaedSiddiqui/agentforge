@@ -3,15 +3,92 @@
 import json
 from unittest.mock import MagicMock
 
+import pytest
+
 from orchestrator.conversation_state import PartialIntakeData
 from orchestrator.intake_extractor import (
+    DAYS_OF_WEEK,
     EXTRACT_FUNCTION,
     _convert_messages,
     apply_correction,
     apply_extraction,
     extract_from_conversation,
     fallback_extract,
+    normalize_business_hours,
 )
+
+pytestmark = pytest.mark.unit
+
+
+class TestBusinessHoursExtraction:
+    """business_hours was absent from the extraction schema entirely.
+
+    No provider could populate it, so PartialIntakeData.business_hours was
+    always None and every conversational onboarding silently deployed the
+    Mon-Fri 09:00-17:00 default no matter what the operator said.
+    """
+
+    def test_business_hours_is_in_the_extraction_schema(self) -> None:
+        properties = EXTRACT_FUNCTION["function"]["parameters"]["properties"]  # type: ignore[index]
+        assert "business_hours" in properties
+        assert set(properties["business_hours"]["properties"]) == set(DAYS_OF_WEEK)
+
+    def test_normalizes_partial_week_to_all_seven_days(self) -> None:
+        result = normalize_business_hours({"saturday": [{"open": "10:00", "close": "14:00"}]})
+
+        assert result is not None
+        assert set(result) == set(DAYS_OF_WEEK)
+        assert result["saturday"] == [{"open": "10:00", "close": "14:00"}]
+        assert result["monday"] == []
+
+    def test_accepts_title_case_days_and_trims(self) -> None:
+        result = normalize_business_hours({" Monday ": [{"open": " 09:00 ", "close": "17:00"}]})
+
+        assert result is not None
+        assert result["monday"] == [{"open": "09:00", "close": "17:00"}]
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            None,
+            "Mon-Fri 9-5",
+            {},
+            {"monday": "09:00-17:00"},
+            {"monday": [{"open": "9am", "close": "5pm"}]},
+            {"monday": [{"open": "25:00", "close": "17:00"}]},
+            {"funday": [{"open": "09:00", "close": "17:00"}]},
+        ],
+    )
+    def test_returns_none_when_nothing_usable(self, value: object) -> None:
+        """None makes the caller fall back to its default and say so.
+
+        A half-parsed week is worse than no week: it reads as deliberate.
+        """
+        assert normalize_business_hours(value) is None
+
+    def test_extraction_result_is_normalized(self) -> None:
+        mock = MagicMock()
+        mock.provider = "openai"
+        tool_call = MagicMock()
+        tool_call.function.name = "update_intake"
+        tool_call.function.arguments = json.dumps(
+            {
+                "business_name": "Northgate",
+                "business_hours": {"Saturday": [{"open": "10:00", "close": "14:00"}]},
+            }
+        )
+        message = MagicMock()
+        message.tool_calls = [tool_call]
+        response = MagicMock()
+        response.choices = [MagicMock(message=message)]
+        mock.create_completion.return_value = response
+
+        extracted = extract_from_conversation(
+            [{"role": "user", "parts": ["Northgate, open Saturday 10 to 2"]}], mock
+        )
+
+        assert set(extracted["business_hours"]) == set(DAYS_OF_WEEK)
+        assert extracted["business_hours"]["saturday"] == [{"open": "10:00", "close": "14:00"}]
 
 
 class TestExtractFunction:
@@ -131,16 +208,20 @@ class TestExtractFromConversation:
         mock_response = MagicMock()
         mock_tool_call = MagicMock()
         mock_tool_call.function.name = "update_intake"
-        mock_tool_call.function.arguments = json.dumps({
-            "business_name": "Miami Glow Salon",
-            "org_id": "miami_glow_salon",
-            "capabilities": ["booking", "cancellation"],
-        })
+        mock_tool_call.function.arguments = json.dumps(
+            {
+                "business_name": "Miami Glow Salon",
+                "org_id": "miami_glow_salon",
+                "capabilities": ["booking", "cancellation"],
+            }
+        )
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.tool_calls = [mock_tool_call]
         mock_model.create_completion.return_value = mock_response
 
-        messages = [{"role": "user", "parts": ["Set up Miami Glow Salon with booking and cancellation"]}]
+        messages = [
+            {"role": "user", "parts": ["Set up Miami Glow Salon with booking and cancellation"]}
+        ]
         result = extract_from_conversation(messages, mock_model)
         assert result["business_name"] == "Miami Glow Salon"
         assert result["org_id"] == "miami_glow_salon"
@@ -151,11 +232,13 @@ class TestExtractFromConversation:
         mock_response = MagicMock()
         mock_tool_call = MagicMock()
         mock_tool_call.function.name = "update_intake"
-        mock_tool_call.function.arguments = json.dumps({
-            "business_name": "Test",
-            "phone_number": "",
-            "voice_id": None,
-        })
+        mock_tool_call.function.arguments = json.dumps(
+            {
+                "business_name": "Test",
+                "phone_number": "",
+                "voice_id": None,
+            }
+        )
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.tool_calls = [mock_tool_call]
         mock_model.create_completion.return_value = mock_response
@@ -268,3 +351,75 @@ class TestFallbackExtract:
         assert result["org_id"] == "test_dental"
         assert result["phone_number"] == "+13055551234"
         assert result["capabilities"] == ["booking"]
+
+
+class TestVoiceIdNormalization:
+    """Vapi voice ids are case-sensitive and validated by exact membership.
+
+    A live conversation saying "use the Savannah voice" extracted "savannah",
+    which `is_valid_vapi_voice` rejects — the assistant would have deployed with
+    a voice Vapi does not recognise and failed at call time.
+    """
+
+    @pytest.mark.parametrize(
+        ("given", "expected"),
+        [
+            ("savannah", "Savannah"),
+            ("SAVANNAH", "Savannah"),
+            ("  elliot  ", "Elliot"),
+            ("Emma", "Emma"),
+            ("nAiNa", "Naina"),
+        ],
+    )
+    def test_canonical_casing_is_restored(self, given: str, expected: str) -> None:
+        from orchestrator.intake_extractor import normalize_voice_id
+
+        assert normalize_voice_id(given) == expected
+
+    @pytest.mark.parametrize("given", [None, "", "   ", "Morgan", "gpt-4", 42])
+    def test_unknown_voice_is_dropped(self, given: object) -> None:
+        """Dropping makes the conversation ask again; keeping deploys a mute assistant."""
+        from orchestrator.intake_extractor import normalize_voice_id
+
+        assert normalize_voice_id(given) is None
+
+    def test_normalized_voice_passes_the_validator(self) -> None:
+        from orchestrator.intake_extractor import normalize_voice_id
+        from shared.vapi_voices import is_valid_vapi_voice
+
+        assert is_valid_vapi_voice(normalize_voice_id("savannah"))
+
+    def test_extraction_result_normalizes_voice(self) -> None:
+        mock = MagicMock()
+        mock.provider = "openai"
+        tool_call = MagicMock()
+        tool_call.function.name = "update_intake"
+        tool_call.function.arguments = json.dumps({"voice_id": "savannah"})
+        message = MagicMock()
+        message.tool_calls = [tool_call]
+        response = MagicMock()
+        response.choices = [MagicMock(message=message)]
+        mock.create_completion.return_value = response
+
+        extracted = extract_from_conversation(
+            [{"role": "user", "parts": ["use the savannah voice"]}], mock
+        )
+
+        assert extracted["voice_id"] == "Savannah"
+
+    def test_unknown_voice_is_absent_from_extraction(self) -> None:
+        mock = MagicMock()
+        mock.provider = "openai"
+        tool_call = MagicMock()
+        tool_call.function.name = "update_intake"
+        tool_call.function.arguments = json.dumps({"voice_id": "Morgan", "org_id": "x"})
+        message = MagicMock()
+        message.tool_calls = [tool_call]
+        response = MagicMock()
+        response.choices = [MagicMock(message=message)]
+        mock.create_completion.return_value = response
+
+        extracted = extract_from_conversation([{"role": "user", "parts": ["use Morgan"]}], mock)
+
+        assert "voice_id" not in extracted
+        assert extracted["org_id"] == "x"

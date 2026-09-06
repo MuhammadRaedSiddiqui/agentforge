@@ -4,6 +4,7 @@ Verify Supabase database setup after applying migrations.
 Tests that all required tables exist and basic operations work.
 """
 
+import contextlib
 import os
 
 from dotenv import load_dotenv
@@ -52,10 +53,8 @@ def test_basic_operations(supabase: Client) -> bool:
         print("\n[TEST] Basic operations on 'organizations' table...")
 
         # Clean up any existing test data
-        try:
+        with contextlib.suppress(Exception):
             supabase.table("organizations").delete().eq("organization_id", test_org_id).execute()
-        except Exception:
-            pass
 
         # Insert
         print("  - INSERT test organization...")
@@ -111,10 +110,8 @@ def test_basic_operations(supabase: Client) -> bool:
     except Exception as e:
         print(f"    [FAIL] Operation failed: {e}")
         # Clean up
-        try:
+        with contextlib.suppress(Exception):
             supabase.table("organizations").delete().eq("organization_id", test_org_id).execute()
-        except Exception:
-            pass
         return False
 
 

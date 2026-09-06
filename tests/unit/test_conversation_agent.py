@@ -3,11 +3,15 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from orchestrator.conversation_agent import ConversationAgent
+import pytest
+
+from orchestrator.conversation_agent import DEFAULT_BUSINESS_HOURS, ConversationAgent
 from orchestrator.conversation_state import (
     PartialIntakeData,
     SessionPhase,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def _make_mock_model(extraction_result: dict | None = None, response_text: str = "OK") -> MagicMock:
@@ -66,7 +70,7 @@ class TestPhaseTransitions:
                 "org_id": "miami_glow",
                 "business_name": "Miami Glow Salon",
                 "phone_number": "+13055551234",
-                "voice_id": "jennifer",
+                "voice_id": "Savannah",
                 "capabilities": ["booking", "cancellation"],
             }
         )
@@ -115,8 +119,11 @@ class TestPhaseTransitions:
             state = agent.new_session()
             state.phase = SessionPhase.CONFIRMING
             state.partial_intake = PartialIntakeData(
-                org_id="t", business_name="T", phone_number="+1",
-                voice_id="v", capabilities=["booking"],
+                org_id="t",
+                business_name="T",
+                phone_number="+1",
+                voice_id="v",
+                capabilities=["booking"],
             )
             _, state = agent.turn(word, state)
             assert state.phase == SessionPhase.EXECUTING, f"Failed on: {word}"
@@ -129,8 +136,11 @@ class TestPhaseTransitions:
         state = agent.new_session()
         state.phase = SessionPhase.CONFIRMING
         state.partial_intake = PartialIntakeData(
-            org_id="t", business_name="T", phone_number="+1",
-            voice_id="v", capabilities=["booking"],
+            org_id="t",
+            business_name="T",
+            phone_number="+1",
+            voice_id="v",
+            capabilities=["booking"],
         )
 
         response, state = agent.turn("cancel", state)
@@ -142,21 +152,103 @@ class TestPhaseTransitions:
     def test_confirming_returns_to_gathering_on_change(self, mock_path: MagicMock) -> None:
         mock_path.read_text.return_value = "System prompt"
         mock_model = _make_mock_model(
-            extraction_result={"voice_id": "rachel"},
-            response_text="Got it, updating the voice to rachel.",
+            extraction_result={"voice_id": "Emma"},
+            response_text="Got it, updating the voice to Emma.",
         )
         agent = ConversationAgent(mock_model)
         state = agent.new_session()
         state.phase = SessionPhase.CONFIRMING
         state.partial_intake = PartialIntakeData(
-            org_id="test", business_name="Test", phone_number="+1234",
-            voice_id="jennifer", capabilities=["booking"],
+            org_id="test",
+            business_name="Test",
+            phone_number="+1234",
+            voice_id="Savannah",
+            capabilities=["booking"],
         )
 
-        response, state = agent.turn("Actually use rachel instead", state)
+        response, state = agent.turn("Actually use Emma instead", state)
 
-        assert state.partial_intake.voice_id == "rachel"
+        assert state.partial_intake.voice_id == "Emma"
         assert state.phase == SessionPhase.CONFIRMING
+
+
+class TestPlanSummaryDefaults:
+    """The summary must describe what actually deploys.
+
+    Timezone and business hours are optional, so a failed extraction silently
+    substitutes a default. A live session dropped a stated "Saturday 10am to
+    2pm" this way: the summary never mentioned hours, so the operator confirmed
+    a plan that said nothing about the field being defaulted underneath them.
+    """
+
+    @staticmethod
+    def _agent() -> ConversationAgent:
+        return ConversationAgent(_make_mock_model())
+
+    @patch("orchestrator.conversation_agent.SYSTEM_PROMPT_PATH")
+    def test_summary_marks_hours_and_timezone_as_defaulted(self, mock_path: MagicMock) -> None:
+        mock_path.read_text.return_value = "System prompt"
+        agent = self._agent()
+        state = agent.new_session()
+        state.partial_intake = PartialIntakeData(
+            org_id="northgate_dental",
+            business_name="Northgate Dental Studio",
+            phone_number="+19086846982",
+            voice_id="Elliot",
+            capabilities=["booking"],
+        )
+
+        summary = agent._build_plan_summary(state)
+
+        assert "default" in summary.lower()
+        assert "America/New_York" in summary
+        # Closed days are shown, so a dropped day is visible rather than absent.
+        assert "Saturday" in summary
+        assert "closed" in summary
+
+    @patch("orchestrator.conversation_agent.SYSTEM_PROMPT_PATH")
+    def test_summary_does_not_cry_default_when_hours_were_captured(
+        self, mock_path: MagicMock
+    ) -> None:
+        mock_path.read_text.return_value = "System prompt"
+        agent = self._agent()
+        state = agent.new_session()
+        state.partial_intake = PartialIntakeData(
+            org_id="northgate_dental",
+            business_name="Northgate Dental Studio",
+            phone_number="+19086846982",
+            voice_id="Elliot",
+            capabilities=["booking"],
+            timezone="America/Chicago",
+            business_hours={"saturday": [{"open": "10:00", "close": "14:00"}]},
+        )
+
+        summary = agent._build_plan_summary(state)
+
+        assert "default" not in summary.lower()
+        assert "America/Chicago" in summary
+        assert "10:00-14:00" in summary
+
+    @patch("orchestrator.conversation_agent.SYSTEM_PROMPT_PATH")
+    def test_default_hours_are_not_shared_between_intakes(self, mock_path: MagicMock) -> None:
+        """The module-level default must not be mutable through a built intake."""
+        mock_path.read_text.return_value = "System prompt"
+        agent = self._agent()
+        state = agent.new_session()
+        state.partial_intake = PartialIntakeData(
+            org_id="a",
+            business_name="A",
+            phone_number="+15550001111",
+            voice_id="Elliot",
+            capabilities=["booking"],
+        )
+
+        first = agent._build_confirmed_intake(state)
+        first["business_hours"]["monday"].append({"open": "00:00", "close": "23:59"})  # type: ignore[index,union-attr]
+        second = agent._build_confirmed_intake(state)
+
+        assert second["business_hours"]["monday"] == [{"open": "09:00", "close": "17:00"}]  # type: ignore[index]
+        assert DEFAULT_BUSINESS_HOURS["monday"] == [{"open": "09:00", "close": "17:00"}]
 
 
 class TestPlanSummary:
@@ -207,7 +299,9 @@ class TestPlanSummary:
 
         json_field_names = ["org_id", "voice_id", "phone_number", "business_name", "capabilities"]
         for field_name in json_field_names:
-            assert field_name not in summary, f"Found JSON field name '{field_name}' in plan summary"
+            assert field_name not in summary, (
+                f"Found JSON field name '{field_name}' in plan summary"
+            )
 
 
 class TestVoiceSuggestions:

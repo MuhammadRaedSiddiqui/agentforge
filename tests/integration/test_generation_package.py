@@ -22,6 +22,8 @@ from agents.vapi_agent.agent import VapiAgent
 from orchestrator.assembler import PackageAssembler
 from orchestrator.planner import Planner
 
+pytestmark = pytest.mark.integration
+
 
 class TestGenerationPackage:
     """Integration test suite for complete package generation."""
@@ -198,7 +200,7 @@ class TestGenerationPackage:
             results.append(result)
 
         # Assemble package
-        package = assembler.assemble(generation_tasks, results)
+        assembler.assemble(generation_tasks, results)
 
         # Verify no external calls were made
         assert len(external_calls) == 0, (
