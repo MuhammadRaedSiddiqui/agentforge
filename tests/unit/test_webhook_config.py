@@ -233,3 +233,41 @@ class TestTemplateCarriesToolSecrets:
             assert tool["server"].get("secret") == "{{server_url_secret}}", (
                 f"{tool['function']['name']} has no server secret"
             )
+
+
+class TestRenderEmptyResponseHandling:
+    """Render answers 202 with no body when a deploy is already queued.
+
+    The adapter called .json() unconditionally, so an accepted deploy surfaced
+    as `Request failed: Expecting value: line 1 column 1` and failed a
+    deployment whose every action had succeeded.
+    """
+
+    def test_empty_body_is_a_success_with_no_deploy_id(self) -> None:
+        from unittest.mock import patch
+
+        from adapters.hosting import RenderAdapter
+
+        with patch.object(RenderAdapter, "_request", return_value={}):
+            adapter = RenderAdapter.__new__(RenderAdapter)
+            adapter.base_url = "https://api.render.com/v1"
+            adapter.service_id = "srv-test"
+            adapter.api_token = "t"
+            receipt = adapter.trigger_deploy()
+
+        assert receipt.status == "success"
+        assert receipt.remote_id is None
+
+    def test_non_empty_body_without_an_id_still_raises(self) -> None:
+        from unittest.mock import patch
+
+        from adapters.hosting import RenderAdapter
+        from shared.errors import PermanentError
+
+        with patch.object(RenderAdapter, "_request", return_value={"unexpected": "shape"}):
+            adapter = RenderAdapter.__new__(RenderAdapter)
+            adapter.base_url = "https://api.render.com/v1"
+            adapter.service_id = "srv-test"
+            adapter.api_token = "t"
+            with pytest.raises(PermanentError, match="missing required 'id'"):
+                adapter.trigger_deploy()
