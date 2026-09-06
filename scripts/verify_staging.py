@@ -329,7 +329,7 @@ from orchestrator.intake_schema import validate_intake, normalize_intake
 fixture = r'{FIXTURE_PATH}'
 output = r'{output_path}'
 
-with open(fixture, 'r') as f:
+with open(fixture, encoding="utf-8") as f:
     intake = json.load(f)
 
 result = validate_intake(intake)

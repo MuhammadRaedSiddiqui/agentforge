@@ -64,6 +64,42 @@ def webhook_base_from_health_url(health_url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
+def build_generation_intake(intake: dict[str, Any], config: AgentForgeConfig) -> dict[str, Any]:
+    """Reshape a validated intake into the form the specialist agents expect.
+
+    The agents read `capabilities`, `vapi.voice_id` and `hosting.webhook_base_url`,
+    none of which exist under those names in the execution schema. This lived
+    inline in the execute path only, so `agent-forge generate` handed the raw
+    intake straight to the agents and failed on every input with
+    "webhook_base_url must be a string" — and would have generated the wrong
+    voice and no capabilities had it got past that.
+
+    One function, so the two entry points cannot drift apart again.
+    """
+    generation_intake = dict(intake)
+    generation_intake["capabilities"] = intake.get("enabled_capabilities", [])
+    generation_intake["vapi"] = {"voice_id": intake.get("voice_id", "")}
+    generation_intake["hosting"] = {
+        "webhook_base_url": webhook_base_from_health_url(config.hosting_health_url),
+    }
+
+    # Prefer the configured service source when it is available. The staging
+    # fixture supplies its checked-in server source as a safe fallback when a
+    # placeholder configuration path is intentionally used during verification.
+    configured_server_path = Path(config.server_source_path)
+    intake_server_path = intake.get("server_source_path")
+    if configured_server_path.exists():
+        generation_intake["server_source_path"] = str(configured_server_path)
+    elif isinstance(intake_server_path, str) and Path(intake_server_path).exists():
+        generation_intake["server_source_path"] = intake_server_path
+    else:
+        raise ValueError(
+            "Server source file not found. Set SERVER_SOURCE_PATH or provide a valid "
+            "server_source_path in the intake."
+        )
+    return generation_intake
+
+
 def load_intake_file(file_path: str) -> dict[str, Any]:
     """
     Load intake from JSON file.
@@ -83,12 +119,18 @@ def load_intake_file(file_path: str) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Intake file not found: {file_path}")
 
-    with path.open("r") as f:
+    # Explicit UTF-8. Without it Windows decodes with the locale codec (cp1252
+    # here), so an intake for "Café München" loads as "CafÃ© MÃ¼nchen" and that
+    # mojibake propagates into the generated assistant name and on to Vapi.
+    # JSON is UTF-8 by definition, so the platform default is never right.
+    with path.open("r", encoding="utf-8") as f:
         try:
             intake = json.load(f)
             return cast(dict[str, Any], intake)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in intake file: {e}") from e
+        except UnicodeDecodeError as e:
+            raise ValueError(f"Intake file is not valid UTF-8: {e}") from e
 
 
 def cmd_config_check(args: argparse.Namespace) -> int:
@@ -439,27 +481,7 @@ def _run_execute(
         # Execute every planned generation task. The legacy empty lists above
         # are retained only for display compatibility; they are not the source
         # of package artifacts.
-        generation_intake = dict(intake)
-        generation_intake["capabilities"] = intake.get("enabled_capabilities", [])
-        generation_intake["vapi"] = {"voice_id": intake.get("voice_id", "")}
-        generation_intake["hosting"] = {
-            "webhook_base_url": webhook_base_from_health_url(config.hosting_health_url),
-        }
-        # Prefer the configured service source when it is available.  The
-        # staging fixture supplies its checked-in server source as a safe
-        # fallback when a placeholder configuration path is intentionally
-        # used during verification.
-        configured_server_path = Path(config.server_source_path)
-        intake_server_path = intake.get("server_source_path")
-        if configured_server_path.exists():
-            generation_intake["server_source_path"] = str(configured_server_path)
-        elif isinstance(intake_server_path, str) and Path(intake_server_path).exists():
-            generation_intake["server_source_path"] = intake_server_path
-        else:
-            raise ValueError(
-                "Server source file not found. Set SERVER_SOURCE_PATH or provide a valid "
-                "server_source_path in the intake."
-            )
+        generation_intake = build_generation_intake(intake, config)
         agent_map: dict[str, Any] = {
             "vapi_agent": vapi_agent,
             "make_agent": make_agent,
@@ -642,7 +664,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     """
     try:
         # Load configuration
-        load_config()
+        config = load_config()
 
         # Load intake
         intake = load_intake_file(args.intake)
@@ -657,8 +679,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 print(f"  • {error}", file=sys.stderr)
             return 1
 
-        # Normalize intake
-        normalized_intake = normalize_intake(intake)
+        # Normalize intake, then reshape it for the agents. Without this the
+        # agents receive no capabilities, no voice and no webhook base.
+        normalized_intake = build_generation_intake(normalize_intake(intake), config)
         organization_id = normalized_intake["organization_id"]
 
         print(f"\nGenerating deployment package for: {organization_id}")
@@ -1083,7 +1106,9 @@ def cmd_security_scan(args: argparse.Namespace) -> int:
 
         for file_path in files_to_scan:
             try:
-                content = file_path.read_text()
+                # errors="replace": this is a secret scan over arbitrary repo
+                # files, so an undecodable byte must not abort the scan.
+                content = file_path.read_text(encoding="utf-8", errors="replace")
 
                 for pattern in secret_patterns:
                     if pattern in {"password", "api_key", "token", "secret"}:
