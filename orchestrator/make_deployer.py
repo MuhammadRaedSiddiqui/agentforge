@@ -49,12 +49,13 @@ class MakeScenarioDeployer:
         6. Activate scenario
 
         Returns:
-            Dict with scenario_id, hook_id, module_count, activated status
+            Dict with scenario_id, hook_id, hook_url, module_count, activated status
         """
         result: dict[str, Any] = {
             "capability": capability,
             "scenario_id": None,
             "hook_id": None,
+            "hook_url": None,
             "module_count": 0,
             "activated": False,
             "used_fallback": False,
@@ -78,6 +79,11 @@ class MakeScenarioDeployer:
                 "cannot be referenced. Reconcile before retrying."
             )
         result["hook_id"] = hook_id
+        # The public URL Make listens on for this hook. The backend forwards to
+        # it, so onboarding has to carry it out of here — a scenario whose URL
+        # never reaches the service is a capability the assistant cannot use.
+        hook_body = (hook_receipt.response_data or {}).get("hook") or {}
+        result["hook_url"] = hook_body.get("url")
         logger.info(f"Created hook {hook_id} for {capability}")
 
         # Step 2: Load blueprint and inject hook ID

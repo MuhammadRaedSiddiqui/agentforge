@@ -62,7 +62,7 @@
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/tools/availability"
+        "url": "{{server_url}}/webhook/{{organization_id}}/availability"
       }
     },
     {
@@ -103,7 +103,7 @@
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/tools/booking"
+        "url": "{{server_url}}/webhook/{{organization_id}}/booking"
       }
     },
     {
@@ -128,7 +128,7 @@
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/tools/cancellation"
+        "url": "{{server_url}}/webhook/{{organization_id}}/cancellation"
       }
     },
     {
@@ -161,7 +161,7 @@
       },
       "async": false,
       "server": {
-        "url": "{{server_url}}/tools/rescheduling"
+        "url": "{{server_url}}/webhook/{{organization_id}}/rescheduling"
       }
     }
   ],
