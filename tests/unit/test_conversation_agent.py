@@ -70,7 +70,7 @@ class TestPhaseTransitions:
                 "org_id": "miami_glow",
                 "business_name": "Miami Glow Salon",
                 "phone_number": "+13055551234",
-                "voice_id": "jennifer",
+                "voice_id": "Savannah",
                 "capabilities": ["booking", "cancellation"],
             }
         )
@@ -152,8 +152,8 @@ class TestPhaseTransitions:
     def test_confirming_returns_to_gathering_on_change(self, mock_path: MagicMock) -> None:
         mock_path.read_text.return_value = "System prompt"
         mock_model = _make_mock_model(
-            extraction_result={"voice_id": "rachel"},
-            response_text="Got it, updating the voice to rachel.",
+            extraction_result={"voice_id": "Emma"},
+            response_text="Got it, updating the voice to Emma.",
         )
         agent = ConversationAgent(mock_model)
         state = agent.new_session()
@@ -162,13 +162,13 @@ class TestPhaseTransitions:
             org_id="test",
             business_name="Test",
             phone_number="+1234",
-            voice_id="jennifer",
+            voice_id="Savannah",
             capabilities=["booking"],
         )
 
-        response, state = agent.turn("Actually use rachel instead", state)
+        response, state = agent.turn("Actually use Emma instead", state)
 
-        assert state.partial_intake.voice_id == "rachel"
+        assert state.partial_intake.voice_id == "Emma"
         assert state.phase == SessionPhase.CONFIRMING
 
 

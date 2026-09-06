@@ -351,3 +351,75 @@ class TestFallbackExtract:
         assert result["org_id"] == "test_dental"
         assert result["phone_number"] == "+13055551234"
         assert result["capabilities"] == ["booking"]
+
+
+class TestVoiceIdNormalization:
+    """Vapi voice ids are case-sensitive and validated by exact membership.
+
+    A live conversation saying "use the Savannah voice" extracted "savannah",
+    which `is_valid_vapi_voice` rejects — the assistant would have deployed with
+    a voice Vapi does not recognise and failed at call time.
+    """
+
+    @pytest.mark.parametrize(
+        ("given", "expected"),
+        [
+            ("savannah", "Savannah"),
+            ("SAVANNAH", "Savannah"),
+            ("  elliot  ", "Elliot"),
+            ("Emma", "Emma"),
+            ("nAiNa", "Naina"),
+        ],
+    )
+    def test_canonical_casing_is_restored(self, given: str, expected: str) -> None:
+        from orchestrator.intake_extractor import normalize_voice_id
+
+        assert normalize_voice_id(given) == expected
+
+    @pytest.mark.parametrize("given", [None, "", "   ", "Morgan", "gpt-4", 42])
+    def test_unknown_voice_is_dropped(self, given: object) -> None:
+        """Dropping makes the conversation ask again; keeping deploys a mute assistant."""
+        from orchestrator.intake_extractor import normalize_voice_id
+
+        assert normalize_voice_id(given) is None
+
+    def test_normalized_voice_passes_the_validator(self) -> None:
+        from orchestrator.intake_extractor import normalize_voice_id
+        from shared.vapi_voices import is_valid_vapi_voice
+
+        assert is_valid_vapi_voice(normalize_voice_id("savannah"))
+
+    def test_extraction_result_normalizes_voice(self) -> None:
+        mock = MagicMock()
+        mock.provider = "openai"
+        tool_call = MagicMock()
+        tool_call.function.name = "update_intake"
+        tool_call.function.arguments = json.dumps({"voice_id": "savannah"})
+        message = MagicMock()
+        message.tool_calls = [tool_call]
+        response = MagicMock()
+        response.choices = [MagicMock(message=message)]
+        mock.create_completion.return_value = response
+
+        extracted = extract_from_conversation(
+            [{"role": "user", "parts": ["use the savannah voice"]}], mock
+        )
+
+        assert extracted["voice_id"] == "Savannah"
+
+    def test_unknown_voice_is_absent_from_extraction(self) -> None:
+        mock = MagicMock()
+        mock.provider = "openai"
+        tool_call = MagicMock()
+        tool_call.function.name = "update_intake"
+        tool_call.function.arguments = json.dumps({"voice_id": "Morgan", "org_id": "x"})
+        message = MagicMock()
+        message.tool_calls = [tool_call]
+        response = MagicMock()
+        response.choices = [MagicMock(message=message)]
+        mock.create_completion.return_value = response
+
+        extracted = extract_from_conversation([{"role": "user", "parts": ["use Morgan"]}], mock)
+
+        assert "voice_id" not in extracted
+        assert extracted["org_id"] == "x"

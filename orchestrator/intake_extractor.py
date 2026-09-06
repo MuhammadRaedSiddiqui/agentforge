@@ -438,6 +438,28 @@ def normalize_business_hours(value: Any) -> dict[str, list[dict[str, str]]] | No
     return normalized if saw_any else None
 
 
+def normalize_voice_id(value: Any) -> str | None:
+    """Map an extracted voice to its canonical Vapi casing.
+
+    Vapi voice ids are case-sensitive and `is_valid_vapi_voice` is an exact
+    membership test, but a model asked to extract "the Savannah voice" will
+    happily return "savannah". That reaches Vapi as an unknown voice and the
+    assistant fails at call time — see the vapi-voice-id-must-match-provider
+    gotcha.
+
+    Returns None for a voice not in the catalog, so the caller drops it and the
+    conversation asks again. Keeping an unrecognised value would deploy an
+    assistant that cannot speak.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = value.strip()
+    for canonical in VAPI_VOICES:
+        if canonical.lower() == candidate.lower():
+            return canonical
+    return None
+
+
 def _normalize_extracted(extracted: dict[str, Any]) -> dict[str, Any]:
     """Apply per-field normalization to a raw extraction result."""
     if "business_hours" in extracted:
@@ -446,6 +468,12 @@ def _normalize_extracted(extracted: dict[str, Any]) -> dict[str, Any]:
             del extracted["business_hours"]
         else:
             extracted["business_hours"] = hours
+    if "voice_id" in extracted:
+        voice = normalize_voice_id(extracted["voice_id"])
+        if voice is None:
+            del extracted["voice_id"]
+        else:
+            extracted["voice_id"] = voice
     return extracted
 
 
