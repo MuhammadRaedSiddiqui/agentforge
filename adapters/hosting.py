@@ -114,7 +114,14 @@ class RenderAdapter:
             elif response.status_code >= 400:
                 raise PermanentError(f"HTTP {response.status_code}: Client error")
 
-            # Success - return JSON
+            # Success. Render answers some calls with no body at all —
+            # POST /deploys returns 202 and nothing when a deploy is already
+            # queued — so an empty response is a success with no payload, not a
+            # parse failure. Calling .json() unconditionally turned an accepted
+            # deploy into "Request failed: Expecting value: line 1 column 1".
+            if not response.content or not response.content.strip():
+                return {}
+
             result: dict[str, Any] = response.json()
             return result
 
@@ -262,9 +269,15 @@ class RenderAdapter:
             operation="trigger_deploy",
         )
 
-        # Extract deploy ID
+        # Extract deploy ID.
+        #
+        # Render answers 202 with no body when a deploy is already queued for
+        # this service. That is an accepted request, not a failed one, and it
+        # simply has no id to report — so an empty response yields a success
+        # receipt without a remote id rather than an error. A non-empty
+        # response that still lacks an id is malformed and does raise.
         deploy_id = response.get("id")
-        if not deploy_id:
+        if not deploy_id and response:
             raise PermanentError(
                 "Render trigger_deploy response missing required 'id' field",
                 context={"operation": "trigger_deploy", "response_keys": list(response.keys())},
